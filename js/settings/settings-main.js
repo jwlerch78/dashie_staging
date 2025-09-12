@@ -1,4 +1,4 @@
-// js/ui/settings/settings-main.js
+// js/settings/settings-main.js
 // Main settings integration - replaces existing settings.js
 
 let settingsController = null;
@@ -45,8 +45,9 @@ export async function initializeSettings() {
 // Load settings CSS files
 async function loadSettingsCSS() {
   const cssFiles = [
-    'js/ui/settings/settings-layout.css',
-    'js/ui/settings/settings-panel.css'
+    'js/settings/settings-layout.css',     // Fixed path
+    'js/settings/settings-panel.css'      // Fixed path
+
   ];
   
   for (const cssFile of cssFiles) {
