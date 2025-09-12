@@ -118,29 +118,21 @@ async function handleUnifiedInput(action, originalEvent = null) {
     return;
   }
   
-  // Handle settings modal
-  try {
-    const { isSettingsOpen, moveSettingsFocus, handleSettingsEnter, closeSettings } = await import('../ui/settings.js');
-    if (isSettingsOpen()) {
-      switch (action) {
-        case "left":
-        case "right":
-        case "up":
-        case "down":
-          moveSettingsFocus(action);
-          break;
-        case "enter":
-          handleSettingsEnter();
-          break;
-        case "escape":
-          closeSettings();
-          break;
-      }
-      return;
-    }
-  } catch (err) {
-    // Settings module not loaded yet, continue
+// Handle settings modal - UPDATED for new settings system
+try {
+  const { isSettingsReady, handleSettingsKeyPress } = await import('../settings/settings-main.js');
+  
+  // Check if settings is open by trying to handle the key press
+  const settingsHandled = handleSettingsKeyPress({ key: action });
+  
+  if (settingsHandled) {
+    // Settings navigation handled the input
+    return;
   }
+} catch (err) {
+  // Settings module not loaded yet, continue
+  console.log('Settings system not ready, continuing with normal navigation');
+}
   
   // Handle exit confirmation dialog
   if (state.confirmDialog) {

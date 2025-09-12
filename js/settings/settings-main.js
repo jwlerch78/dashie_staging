@@ -15,7 +15,7 @@ export async function initializeSettings() {
     // Load CSS
     await loadSettingsCSS();
     
-    // Initialize controller
+    // Initialize controller - FIXED: Correct import path
     const { SettingsController } = await import('./settings-controller.js');
     settingsController = new SettingsController();
     const success = await settingsController.init();
@@ -24,7 +24,7 @@ export async function initializeSettings() {
       console.warn('⚙️ ⚠️ Settings controller initialization failed, continuing with defaults');
     }
     
-    // Initialize navigation
+    // Initialize navigation - FIXED: Correct import path  
     const { SettingsNavigation } = await import('./settings-navigation.js');
     settingsNavigation = new SettingsNavigation(settingsController);
     
@@ -45,9 +45,8 @@ export async function initializeSettings() {
 // Load settings CSS files
 async function loadSettingsCSS() {
   const cssFiles = [
-    'js/settings/settings-layout.css',     // Fixed path
-    'js/settings/settings-panel.css'      // Fixed path
-
+    'js/settings/settings-layout.css',     // FIXED: Correct path
+    'js/settings/settings-panel.css'      // FIXED: Correct path
   ];
   
   for (const cssFile of cssFiles) {
@@ -69,6 +68,8 @@ async function loadSettingsCSS() {
 // Show settings (main entry point)
 export async function showSettings() {
   try {
+    console.log('⚙️ 👁️ Showing settings interface...');
+    
     // Initialize if not already done
     if (!isInitialized) {
       const success = await initializeSettings();
@@ -81,6 +82,7 @@ export async function showSettings() {
     // Show the settings UI
     if (settingsNavigation) {
       await settingsNavigation.show();
+      console.log('⚙️ ✅ Settings interface displayed');
     }
     
   } catch (error) {
@@ -95,10 +97,10 @@ export function hideSettings() {
   }
 }
 
-// Get a setting value (public API)
+// ENHANCED: Better error handling and fallbacks for getting settings
 export function getSetting(path, defaultValue = undefined) {
-  if (!settingsController) {
-    console.warn('⚙️ ⚠️ Settings not initialized, returning default value');
+  if (!settingsController || !settingsController.isReady()) {
+    console.warn('⚙️ ⚠️ Settings not ready, returning default value for:', path);
     return defaultValue;
   }
   
@@ -108,8 +110,8 @@ export function getSetting(path, defaultValue = undefined) {
 
 // Set a setting value (public API)
 export function setSetting(path, value) {
-  if (!settingsController) {
-    console.warn('⚙️ ⚠️ Settings not initialized, cannot set value');
+  if (!settingsController || !settingsController.isReady()) {
+    console.warn('⚙️ ⚠️ Settings not ready, cannot set value:', path);
     return false;
   }
   
@@ -161,12 +163,22 @@ export function getAllSettings() {
   return settingsController.getSettings();
 }
 
-// Apply current theme from settings
+// ENHANCED: Apply current theme from settings with better integration
 export function applyCurrentTheme() {
   const theme = getSetting('display.theme', 'dark');
   console.log(`⚙️ 🎨 Applying theme: ${theme}`);
   
-  // Update CSS custom properties
+  // Try to use existing theme manager first
+  try {
+    const { switchTheme } = await import('../core/theme.js');
+    switchTheme(theme);
+    console.log('⚙️ ✅ Applied theme via theme manager');
+    return;
+  } catch (error) {
+    console.warn('⚙️ Theme manager not available, using fallback');
+  }
+  
+  // Fallback: Update CSS custom properties directly
   const root = document.documentElement;
   
   if (theme === 'light') {
@@ -184,13 +196,9 @@ export function applyCurrentTheme() {
     root.style.setProperty('--text-muted', '#999999');
   }
   
-  // Update theme manager if available
-  if (window.themeManager && window.themeManager.setTheme) {
-    window.themeManager.setTheme(theme);
-  }
-  
   // Set data attribute for CSS targeting
   document.documentElement.setAttribute('data-theme', theme);
+  console.log('⚙️ ✅ Applied theme via fallback method');
 }
 
 // Listen for settings updates and apply themes
@@ -206,7 +214,17 @@ function setupSettingsListeners() {
   });
 }
 
-// Legacy compatibility functions for existing code
+// INTEGRATION: Handle keyboard events from main navigation system
+export function handleSettingsKeyPress(event) {
+  if (!settingsNavigation || !settingsNavigation.isShown()) {
+    return false;
+  }
+  
+  // Let the settings navigation handle the key
+  return settingsNavigation.handleKeyPress(event);
+}
+
+// LEGACY COMPATIBILITY: Functions for existing code
 export function getTheme() {
   return getSetting('display.theme', 'dark');
 }
@@ -273,16 +291,6 @@ export async function cleanupSettings() {
   console.log('⚙️ ✅ Settings cleanup complete');
 }
 
-// Integration with existing navigation system
-export function handleSettingsKeyPress(key) {
-  if (!settingsNavigation || !settingsNavigation.isShown()) {
-    return false;
-  }
-  
-  // Let the settings navigation handle the key
-  return settingsNavigation.handleKeyPress({ key });
-}
-
 // Export for backward compatibility
 export {
   showSettings as show,
@@ -292,77 +300,42 @@ export {
   saveSettings as save
 };
 
-// Auto-initialize when imported (optional)
+// Auto-initialize when auth is ready
 export function autoInitialize() {
-  // Only auto-initialize if we have a user
-  if (window.authManager && window.authManager.currentUser) {
-    initializeSettings().catch(error => {
-      console.warn('⚙️ ⚠️ Auto-initialization failed:', error);
+  // Check if we have authentication ready
+  const checkAuth = () => {
+    if ((window.authManager && window.authManager.currentUser) || 
+        (window.dashieAuth && window.dashieAuth.isAuthenticated())) {
+      initializeSettings().catch(error => {
+        console.warn('⚙️ ⚠️ Auto-initialization failed:', error);
+      });
+      return true;
+    }
+    return false;
+  };
+  
+  // Try immediately
+  if (!checkAuth()) {
+    // Wait for auth to be ready
+    document.addEventListener('dashie-auth-ready', () => {
+      checkAuth();
     });
+    
+    // Also try again after a short delay
+    setTimeout(() => {
+      checkAuth();
+    }, 2000);
   }
 }
 
 // Set up listeners when module loads
 setupSettingsListeners();
 
-// Initialize migration helper for existing installations
-export async function migrateFromOldSettings() {
-  try {
-    console.log('⚙️ 🔄 Checking for settings migration...');
-    
-    // Check if old settings exist in localStorage
-    const oldTheme = localStorage.getItem('dashie-theme');
-    const oldSleepSettings = localStorage.getItem('dashie-sleep-settings');
-    const oldPhotosSettings = localStorage.getItem('dashie-photos-settings');
-    
-    if (!oldTheme && !oldSleepSettings && !oldPhotosSettings) {
-      console.log('⚙️ ✅ No old settings found, skipping migration');
-      return;
-    }
-    
-    console.log('⚙️ 🔄 Migrating old settings...');
-    
-    // Migrate theme
-    if (oldTheme) {
-      setSetting('display.theme', oldTheme);
-      localStorage.removeItem('dashie-theme');
-      console.log('⚙️ ➡️ Migrated theme setting');
-    }
-    
-    // Migrate sleep settings
-    if (oldSleepSettings) {
-      try {
-        const sleepData = JSON.parse(oldSleepSettings);
-        if (sleepData.sleepTime) setSetting('display.sleepTime', sleepData.sleepTime);
-        if (sleepData.wakeTime) setSetting('display.wakeTime', sleepData.wakeTime);
-        if (sleepData.reSleepDelay) setSetting('display.reSleepDelay', sleepData.reSleepDelay);
-        localStorage.removeItem('dashie-sleep-settings');
-        console.log('⚙️ ➡️ Migrated sleep settings');
-      } catch (error) {
-        console.warn('⚙️ ⚠️ Failed to migrate sleep settings:', error);
-      }
-    }
-    
-    // Migrate photos settings
-    if (oldPhotosSettings) {
-      try {
-        const photosData = JSON.parse(oldPhotosSettings);
-        if (photosData.transitionTime) setSetting('photos.transitionTime', photosData.transitionTime);
-        localStorage.removeItem('dashie-photos-settings');
-        console.log('⚙️ ➡️ Migrated photos settings');
-      } catch (error) {
-        console.warn('⚙️ ⚠️ Failed to migrate photos settings:', error);
-      }
-    }
-    
-    // Save migrated settings
-    await saveSettings();
-    console.log('⚙️ ✅ Settings migration complete');
-    
-  } catch (error) {
-    console.error('⚙️ ❌ Settings migration failed:', error);
-  }
+// NEW: Called from existing settings integration
+export async function initializeSupabaseSettings() {
+  console.log('⚙️ 🔄 Legacy initializeSupabaseSettings called, redirecting to new system...');
+  return await initializeSettings();
 }
 
-// Auto-run migration on import
-migrateFromOldSettings();
+// Auto-initialize (this replaces the old manual initialization)
+autoInitialize();
