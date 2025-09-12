@@ -2,6 +2,40 @@
 // config.js
 //*****************
 
+// supabase dev and prod configuration
+const dbConfig = {
+    production: {
+        supabaseUrl: 'https://cseaywxcvnxcsypaqaid.supabase.co',
+        supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzZWF5d3hjdm54Y3N5cGFxYWlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc2MDIxOTEsImV4cCI6MjA3MzE3ODE5MX0.Wnd7XELrtPIDKeTcHVw7dl3awn3BlI0z9ADKPgSfHhA',
+        environment: 'production'
+    },
+    development: {
+        supabaseUrl: 'https://cwglbtosingboqepsmjk.supabase.co', 
+        supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN3Z2xidG9zaW5nYm9xZXBzbWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc2NDY4NjYsImV4cCI6MjA3MzIyMjg2Nn0.VCP5DSfAwwZMjtPl33bhsixSiu_lHsM6n42FMJRP3YA',
+        environment: 'development'
+    }
+};
+
+// Auto-detect environment based on domain
+const getCurrentDbConfig = () => {
+    if (window.location.hostname.includes('dev.')) {
+        return dbConfig.development;
+    }
+    return dbConfig.production;
+};
+
+const currentDbConfig = getCurrentDbConfig();
+
+// Export for use in other files
+window.currentDbConfig = currentDbConfig;
+
+
+
+
+
+
+
+
 // Theme + configuration
 const theme = {
   sidebarBg: "#222",

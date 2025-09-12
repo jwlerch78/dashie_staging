@@ -1,11 +1,10 @@
-// js/main.js - App Initialization & Orchestration with Firebase Settings
+// js/main.js - App Initialization & Orchestration with Centralized Settings
 
 import { initializeEvents } from './core/events.js';
 import { updateFocus, initializeHighlightTimeout } from './core/navigation.js';
 import { renderGrid, renderSidebar } from './ui/grid.js';
-import { initializeSleepTimer } from './ui/settings.js';
+import { initializeSleepTimer } from './ui/settings/settings-main.js';
 import { initializeThemeSystem } from './core/theme.js';
-import { initializeSettings } from './ui/settings.js';
 
 // ---------------------
 // EARLY THEME APPLICATION
@@ -28,9 +27,7 @@ async function preApplyTheme() {
 function initializeApp() {
   console.log("Initializing Dashie Dashboard...");
 
-  // Initialize Firebase settings early (handles auth state internally)
-  initializeSettings();
-  
+ 
   // Initialize theme system first (before any UI rendering)
   // Note: Early theme application already happened above
   initializeThemeSystem();
@@ -38,7 +35,7 @@ function initializeApp() {
   // Set up event listeners
   initializeEvents();
   
-  // Initialize sleep timer system (this loads settings, but Firebase will override)
+  // Initialize sleep timer system (this loads LOCAL settings only)
   initializeSleepTimer();
   
   // Initialize navigation highlight timeout system
@@ -55,9 +52,6 @@ function initializeApp() {
       console.log('🔐 App marked as authenticated');
     }
   }, 1000); 
-  
-  // DON'T call updateFocus() here - let it start clean with no highlights
-  // updateFocus();
   
   console.log("Dashie Dashboard initialized successfully!");
 }

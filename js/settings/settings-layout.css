@@ -1,0 +1,417 @@
+/* js/ui/settings/settings-layout.css */
+/* Two-panel settings layout with category sidebar and settings panel */
+
+/* Main Settings Container - Takes up most of the screen */
+.settings-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.95);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: all var(--transition-medium);
+}
+
+.settings-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.settings-container {
+  width: 95vw;
+  height: 90vh;
+  max-width: 1400px;
+  max-height: 900px;
+  background: var(--bg-primary);
+  border-radius: var(--border-radius);
+  display: flex;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Left Panel - Categories */
+.settings-sidebar {
+  width: 350px;
+  background: var(--bg-secondary);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.settings-sidebar-header {
+  padding: 30px 25px 20px 25px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-primary);
+}
+
+.settings-sidebar-header h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-sidebar-header .close-btn {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 4px;
+  transition: all var(--transition-fast);
+}
+
+.settings-sidebar-header .close-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.settings-sidebar-header .close-btn.selected {
+  outline: 2px solid var(--outline-selected);
+  outline-offset: 2px;
+  color: var(--accent-orange);
+}
+
+/* Categories List */
+.settings-categories {
+  flex: 1;
+  padding: 10px 0;
+  overflow-y: auto;
+}
+
+.category-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 18px 25px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border-left: 4px solid transparent;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 500;
+  user-select: none;
+}
+
+.category-item:hover:not(.disabled) {
+  background: rgba(255, 170, 0, 0.1);
+  border-left-color: rgba(255, 170, 0, 0.3);
+}
+
+.category-item.selected {
+  background: rgba(255, 170, 0, 0.2);
+  border-left-color: var(--accent-orange);
+  color: var(--accent-orange);
+  outline: 2px solid var(--outline-selected);
+  outline-offset: -2px;
+}
+
+.category-item.active {
+  background: var(--accent-orange);
+  color: var(--bg-primary);
+  border-left-color: var(--accent-orange);
+}
+
+.category-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  color: var(--text-muted);
+}
+
+.category-icon {
+  font-size: 20px;
+  width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.category-label {
+  flex: 1;
+}
+
+.category-description {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
+/* Right Panel - Settings Content */
+.settings-main {
+  flex: 1;
+  background: var(--bg-primary);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Welcome/Empty State */
+.settings-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 40px;
+}
+
+.settings-welcome-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+  opacity: 0.6;
+}
+
+.settings-welcome h2 {
+  margin: 0 0 10px 0;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.settings-welcome p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+  max-width: 400px;
+}
+
+/* Settings Panel Container */
+.settings-panel-container {
+  height: 100%;
+  position: relative;
+}
+
+/* Panel Transitions */
+.settings-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(20px);
+  transition: all var(--transition-medium);
+}
+
+.settings-panel.active {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+}
+
+/* Loading State */
+.settings-container.loading {
+  pointer-events: none;
+}
+
+.settings-container.loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.settings-container.loading::before {
+  content: 'Loading Settings...';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text-primary);
+  font-size: 18px;
+  z-index: 11;
+  background: var(--bg-secondary);
+  padding: 20px 30px;
+  border-radius: var(--border-radius-small);
+  border: 1px solid var(--text-muted);
+}
+
+/* Footer (for future save/cancel buttons) */
+.settings-footer {
+  background: var(--bg-secondary);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 20px 30px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 15px;
+  flex-shrink: 0;
+}
+
+.settings-footer.hidden {
+  display: none;
+}
+
+.settings-btn {
+  background: var(--bg-button);
+  color: var(--text-primary);
+  border: none;
+  border-radius: var(--border-radius-small);
+  padding: 12px 24px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  min-width: 100px;
+}
+
+.settings-btn.primary {
+  background: var(--accent-orange);
+  color: var(--bg-primary);
+}
+
+.settings-btn:hover:not(.selected) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.settings-btn.selected {
+  outline: 2px solid var(--outline-selected);
+  outline-offset: 2px;
+  transform: translateY(-1px);
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .settings-container {
+    width: 98vw;
+    height: 95vh;
+  }
+  
+  .settings-sidebar {
+    width: 300px;
+  }
+  
+  .category-item {
+    padding: 15px 20px;
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 900px) {
+  .settings-container {
+    flex-direction: column;
+    width: 98vw;
+    height: 95vh;
+  }
+  
+  .settings-sidebar {
+    width: 100%;
+    height: 200px;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .settings-categories {
+    display: flex;
+    gap: 10px;
+    padding: 10px 20px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  
+  .category-item {
+    flex-shrink: 0;
+    border-left: none;
+    border-bottom: 4px solid transparent;
+    min-width: 120px;
+    text-align: center;
+    flex-direction: column;
+    gap: 5px;
+    padding: 15px 10px;
+  }
+  
+  .category-item.selected,
+  .category-item:hover:not(.disabled) {
+    border-left: none;
+    border-bottom-color: var(--accent-orange);
+  }
+  
+  .settings-main {
+    flex: 1;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .settings-overlay {
+    padding: 10px;
+  }
+  
+  .settings-container {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+  
+  .settings-sidebar-header {
+    padding: 20px;
+  }
+  
+  .settings-sidebar-header h1 {
+    font-size: 20px;
+  }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .settings-overlay,
+  .settings-panel,
+  .category-item,
+  .settings-btn {
+    transition: none;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .settings-container {
+    border: 2px solid var(--text-primary);
+  }
+  
+  .category-item {
+    border: 1px solid transparent;
+  }
+  
+  .category-item.selected {
+    border-color: var(--accent-orange);
+  }
+}
+
+/* Dark mode overrides (if needed) */
+[data-theme="dark"] .settings-container {
+  background: #1a1a1a;
+  border-color: #444;
+}
+
+[data-theme="dark"] .settings-sidebar {
+  background: #222;
+}
+
+/* Focus visible for keyboard navigation */
+.category-item:focus-visible,
+.settings-btn:focus-visible,
+.close-btn:focus-visible {
+  outline: 2px solid var(--outline-focused);
+  outline-offset: 2px;
+}

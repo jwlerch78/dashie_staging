@@ -13,6 +13,8 @@ export class AuthManager {
     this.isWebView = this.detectWebView();
     this.hasNativeAuth = this.detectNativeAuth();
     this.isFireTV = this.detectFireTV();
+    this.settingsInitialized = false; // ✅ NEW: Prevent duplicate settings init
+
     
     // Initialize auth modules
     this.storage = new AuthStorage();
@@ -200,7 +202,7 @@ checkExistingAuth() {
     }
   }
 
-// ENHANCED: Update web auth handling
+// ENHANCED: Update web auth handling - REMOVE duplicate UI calls
 handleWebAuthResult(result) {
   console.log('🔐 Web auth result received:', result);
   
@@ -208,20 +210,16 @@ handleWebAuthResult(result) {
     this.setUserFromAuth(result.user, 'web', result.tokens);
     this.isSignedIn = true;
     this.storage.saveUser(this.currentUser);
-    
-    // CRITICAL: Hide sign-in UI and show dashboard immediately
-    console.log('🔐 🎯 Hiding sign-in UI and showing dashboard...');
-    this.ui.hideSignInPrompt();
-    this.ui.showSignedInState();
-    
-    console.log('🔐 ✅ Web auth successful:', this.currentUser.name);
+      
+    // ✅ SIMPLIFIED: setUserFromAuth now handles all UI updates
+    console.log('🔐 ✅ Web auth completed, UI handled by setUserFromAuth');
   } else {
     console.error('🔐 ❌ Web auth failed:', result.error);
     this.ui.showAuthError(result.error || 'Web authentication failed');
   }
 }
   
-// FIXED: Store access token from any auth method
+// FIXED: Store access token from any auth method with duplicate prevention
 setUserFromAuth(userData, authMethod, tokens = null) {
   // Determine the Google access token from various sources
   let googleAccessToken = null;
@@ -283,9 +281,34 @@ setUserFromAuth(userData, authMethod, tokens = null) {
     canUseRLS: !!this.googleAccessToken
   });
 
+  this.isSignedIn = true;
+
+  // ✅ NEW: Settings initialization with duplicate prevention
+  if (!this.settingsInitialized) {
+    console.log('🔐 🎯 Initializing settings for first time...');
+    this.settingsInitialized = true;
+    
+    // Dynamic import to avoid circular dependencies
+    import('../ui/settings.js').then(({ initializeSupabaseSettings }) => {
+      initializeSupabaseSettings();
+    });
+  } else {
+    console.log('🔐 ⏭️ Settings already initialized, skipping...');
+  }
+
+  // ✅ NEW: UI updates (add these if they don't exist elsewhere)
+  console.log('🔐 🎯 Hiding sign-in UI and showing dashboard...');
+  this.ui.hideSignInPrompt();
+  this.ui.showSignedInState();
+  
+  console.log(`🔐 ✅ ${authMethod} auth successful:`, this.currentUser.name);
+
   // Notify that auth is ready
   document.dispatchEvent(new CustomEvent('dashie-auth-ready'));
 }
+
+
+  
   createWebViewUser() {
     console.log('🔐 Creating WebView user');
     

@@ -346,7 +346,7 @@ function handleMenuSelection(optionId) {
       break;
     case "settings":
       // Import and open settings - use correct function name
-      import('../ui/settings.js').then(({ showSettings }) => {
+      import('../ui/settings/settings-main.js').then(({ showSettings }) => {
         showSettings();
       }).catch(() => {
         console.log("Settings function not available");

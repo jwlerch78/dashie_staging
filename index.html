@@ -1,7 +1,3 @@
-<!---------------->
-<!-- index.html -->
-<!---------------->
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -35,26 +31,11 @@
   <div id="grid"></div>
 </div>
 
-
-<script type="module">
-  // Initialize Firebase settings when the page loads
-  import { initializeSettings } from './js/ui/settings.js';
-  
-  // Wait for auth to be ready, then initialize settings
-  document.addEventListener('DOMContentLoaded', () => {
-    // Give auth system time to initialize
-    setTimeout(() => {
-      initializeSettings();
-    }, 1000);
-  });
-</script>
-  
-<!-- Google SSO Login -->
-<script type="module" src="js/auth/simple-auth.js"></script>
-  
-
   <!-- Configuration (keep this) -->
   <script src="js/config.js"></script>
+   
+<!-- Google SSO Login (this handles settings initialization internally) -->
+<script type="module" src="js/auth/simple-auth.js"></script>
   
   <!-- Modular JavaScript (ES6 modules) -->
   <script type="module" src="js/main.js"></script>

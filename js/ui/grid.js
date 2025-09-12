@@ -234,13 +234,15 @@ export function createMenuItem(item, type, globalIndex) {
 // ---------------------
 
 function addMenuItemEventListeners(div, type, globalIndex) {
-  // Mouse hover events
+  let touchStartTime = 0;
+  let touchTimeout = null;
+  
+  // Mouse hover events (unchanged)
   div.addEventListener("mouseover", () => {
     if (state.confirmDialog || state.isAsleep || state.selectedCell) return;
     setFocus({ type: "menu", index: globalIndex });
     elements.sidebar.classList.add("expanded");
     
-    // Import updateFocus and call it
     import('../core/navigation.js').then(({ updateFocus }) => updateFocus());
   });
 
@@ -249,24 +251,67 @@ function addMenuItemEventListeners(div, type, globalIndex) {
     if (state.focus.type !== "menu") elements.sidebar.classList.remove("expanded");
   });
 
-  // Click events
-  div.addEventListener("click", () => {
+  // Touch events for better mobile/touchscreen handling
+  div.addEventListener("touchstart", (e) => {
+    if (state.confirmDialog || state.isAsleep) return;
+    touchStartTime = Date.now();
+    
+    // Prevent default to avoid mouse events firing
+    e.preventDefault();
+    
+    // Don't allow menu touches when widget is focused
+    if (state.selectedCell) return;
+    
+    // Set focus immediately on touch start
+    setFocus({ type: "menu", index: globalIndex });
+    
+    // For system items, expand the menu but don't execute yet
+    if (type === "system") {
+      elements.sidebar.classList.add("expanded");
+      import('../core/navigation.js').then(({ updateFocus }) => updateFocus());
+    }
+  });
+
+  div.addEventListener("touchend", (e) => {
     if (state.confirmDialog || state.isAsleep) return;
     
-    // Don't allow menu clicks when widget is focused
-    if (state.selectedCell) {
+    const touchDuration = Date.now() - touchStartTime;
+    
+    // Only treat as a tap if touch was brief (less than 300ms)
+    if (touchDuration < 300) {
+      e.preventDefault();
+      
+      if (state.selectedCell) return;
+      
+      import('../core/navigation.js').then(({ updateFocus, handleEnter }) => {
+        // Small delay to show expansion, then execute
+        if (type === "system") {
+          setTimeout(() => handleEnter(), 150);
+        } else {
+          handleEnter();
+        }
+      });
+    }
+  });
+
+  // Click events (for mouse/non-touch)
+  div.addEventListener("click", (e) => {
+    if (state.confirmDialog || state.isAsleep) return;
+    
+    // Skip if this was a touch event (touchend will handle it)
+    if (e.pointerType === 'touch' || touchStartTime > 0) {
+      touchStartTime = 0; // Reset for next interaction
       return;
     }
     
+    if (state.selectedCell) return;
+    
     setFocus({ type: "menu", index: globalIndex });
     
-    // Import navigation functions
     import('../core/navigation.js').then(({ updateFocus, handleEnter }) => {
-      // For system items, expand the menu first
       if (type === "system") {
         elements.sidebar.classList.add("expanded");
         updateFocus();
-        // Small delay to show expansion, then execute
         setTimeout(() => handleEnter(), 150);
       } else {
         handleEnter();
