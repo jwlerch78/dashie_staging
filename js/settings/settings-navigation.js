@@ -311,6 +311,10 @@ export class SettingsNavigation {
     this.panels.forEach(panel => {
       if (panel.hide) panel.hide();
     });
+    
+    // Also remove any coming soon messages
+    const comingSoon = this.element.querySelector('.settings-coming-soon');
+    if (comingSoon) comingSoon.remove();
   }
 
   // Update category selection visual state

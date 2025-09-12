@@ -24,7 +24,7 @@ async function preApplyTheme() {
 // APP INITIALIZATION
 // ---------------------
 
-function initializeApp() {
+async function initializeApp() {
   console.log("Initializing Dashie Dashboard...");
 
   await initializeSettings();  // Add 'await' since it's async
