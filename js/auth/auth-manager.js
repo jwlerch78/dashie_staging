@@ -5,6 +5,8 @@ import { WebAuth } from './web-auth.js';
 import { AuthUI } from './auth-ui.js';
 import { AuthStorage } from './auth-storage.js';
 import { DeviceFlowAuth } from './device-flow-auth.js';
+import { GoogleAPIClient } from '../google-apis/google-api-client.js';
+
 
 export class AuthManager {
   constructor() {
@@ -13,8 +15,6 @@ export class AuthManager {
     this.isWebView = this.detectWebView();
     this.hasNativeAuth = this.detectNativeAuth();
     this.isFireTV = this.detectFireTV();
-    this.settingsInitialized = false; // ✅ NEW: Prevent duplicate settings init
-
     
     // Initialize auth modules
     this.storage = new AuthStorage();
@@ -26,6 +26,7 @@ export class AuthManager {
     this.nativeAuthFailed = false;
 
     this.googleAccessToken = null; // Store the Google access token for RLS authentication with Supabase
+    this.googleAPI = null;
     
     this.init();
   }
@@ -202,7 +203,7 @@ checkExistingAuth() {
     }
   }
 
-// ENHANCED: Update web auth handling - REMOVE duplicate UI calls
+// ENHANCED: Update web auth handling
 handleWebAuthResult(result) {
   console.log('🔐 Web auth result received:', result);
   
@@ -210,16 +211,20 @@ handleWebAuthResult(result) {
     this.setUserFromAuth(result.user, 'web', result.tokens);
     this.isSignedIn = true;
     this.storage.saveUser(this.currentUser);
-      
-    // ✅ SIMPLIFIED: setUserFromAuth now handles all UI updates
-    console.log('🔐 ✅ Web auth completed, UI handled by setUserFromAuth');
+    
+    // CRITICAL: Hide sign-in UI and show dashboard immediately
+    console.log('🔐 🎯 Hiding sign-in UI and showing dashboard...');
+    this.ui.hideSignInPrompt();
+    this.ui.showSignedInState();
+    
+    console.log('🔐 ✅ Web auth successful:', this.currentUser.name);
   } else {
     console.error('🔐 ❌ Web auth failed:', result.error);
     this.ui.showAuthError(result.error || 'Web authentication failed');
   }
 }
   
-// FIXED: Store access token from any auth method with duplicate prevention
+// FIXED: Store access token from any auth method
 setUserFromAuth(userData, authMethod, tokens = null) {
   // Determine the Google access token from various sources
   let googleAccessToken = null;
@@ -239,6 +244,34 @@ setUserFromAuth(userData, authMethod, tokens = null) {
     console.warn('🔐 ⚠️ No Google access token found for', authMethod);
     console.warn('🔐 This means RLS authentication will not work');
   }
+
+    // After successful authentication, initialize Google API client
+    if (this.googleAccessToken) {
+      this.googleAPI = new GoogleAPIClient(this);
+      console.log('🔧 Google API client initialized');
+      
+      // Test API access in background
+      setTimeout(async () => {
+        try {
+          const testResults = await this.googleAPI.testAccess();
+          console.log('🧪 Google API access test results:', testResults);
+          
+          // Store API capabilities
+          this.apiCapabilities = testResults;
+          
+          // Notify widgets that APIs are ready
+          window.dispatchEvent(new CustomEvent('google-apis-ready', {
+            detail: testResults
+          }));
+          
+        } catch (error) {
+          console.warn('Google API access test failed:', error);
+        }
+      }, 2000);
+    }
+
+
+  
 
   // Create user object with Google access token included
   this.currentUser = {
@@ -280,28 +313,6 @@ setUserFromAuth(userData, authMethod, tokens = null) {
     tokenLength: this.googleAccessToken?.length,
     canUseRLS: !!this.googleAccessToken
   });
-
-  this.isSignedIn = true;
-
-  // ✅ NEW: Settings initialization with duplicate prevention
-  if (!this.settingsInitialized) {
-    console.log('🔐 🎯 Initializing settings for first time...');
-    this.settingsInitialized = true;
-    
-    // Dynamic import to avoid circular dependencies
-    import('../ui/settings.js').then(({ initializeSupabaseSettings }) => {
-      initializeSupabaseSettings();
-    });
-  } else {
-    console.log('🔐 ⏭️ Settings already initialized, skipping...');
-  }
-
-  // ✅ NEW: UI updates (add these if they don't exist elsewhere)
-  console.log('🔐 🎯 Hiding sign-in UI and showing dashboard...');
-  this.ui.hideSignInPrompt();
-  this.ui.showSignedInState();
-  
-  console.log(`🔐 ✅ ${authMethod} auth successful:`, this.currentUser.name);
 
   // Notify that auth is ready
   document.dispatchEvent(new CustomEvent('dashie-auth-ready'));
