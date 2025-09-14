@@ -1,5 +1,5 @@
 // js/settings/test-settings.js
-// Quick test script to verify settings system works
+// Fixed test script that properly simulates events
 
 async function testSettingsSystem() {
   console.log('🧪 Testing Settings System...');
@@ -52,9 +52,16 @@ async function testSettingsSystem() {
     console.log(`Settings sidebar: ${sidebar ? '✅ Found' : '❌ Missing'}`);
     console.log(`Settings main: ${main ? '✅ Found' : '❌ Missing'}`);
     
-    // Test 7: Test keyboard navigation
+    // Test 7: Test keyboard navigation - FIXED
     console.log('⌨️ Test 7: Testing keyboard navigation...');
-    const navTest = settingsMain.handleSettingsKeyPress({ key: 'ArrowDown' });
+    // Create a proper event-like object
+    const mockEvent = {
+      key: 'ArrowDown',
+      preventDefault: () => {},
+      stopPropagation: () => {},
+      stopImmediatePropagation: () => {}
+    };
+    const navTest = settingsMain.handleSettingsKeyPress(mockEvent);
     console.log(`Keyboard navigation test: ${navTest ? '✅ Handled' : '❌ Not handled'}`);
     
     // Test 8: Hide settings
@@ -85,33 +92,5 @@ async function testSettingsSystem() {
 
 // Export for manual testing
 window.testSettingsSystem = testSettingsSystem;
-
-// Instructions for testing
-console.log(`
-🧪 SETTINGS SYSTEM TEST INSTRUCTIONS
-
-1. Open browser console
-2. Run: testSettingsSystem()
-3. Watch console output for test results
-4. Use these manual tests:
-
-   // Basic API tests:
-   import('./js/settings/settings-main.js').then(s => {
-     s.initializeSettings().then(() => {
-       console.log('Theme:', s.getSetting('display.theme'));
-       s.setSetting('display.theme', 'light');
-       s.showSettings();
-     });
-   });
-
-   // Test keyboard navigation:
-   // Open settings, then press arrow keys to navigate
-   
-   // Test D-pad simulation:
-   window.handleRemoteInput && window.handleRemoteInput(40); // Down arrow
-   
-5. Check for any console errors
-6. Verify settings persist after page reload
-`);
 
 export { testSettingsSystem };

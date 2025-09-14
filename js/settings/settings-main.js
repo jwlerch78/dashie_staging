@@ -32,7 +32,7 @@ export async function initializeSettings() {
     console.log('⚙️ ✅ Settings system initialized successfully');
     
     // Apply current theme on initialization
-    applyCurrentTheme();
+    await applyCurrentTheme();
     
     return true;
     
@@ -164,7 +164,7 @@ export function getAllSettings() {
 }
 
 // ENHANCED: Apply current theme from settings with better integration
-export function applyCurrentTheme() {
+export async function applyCurrentTheme() {
   const theme = getSetting('display.theme', 'dark');
   console.log(`⚙️ 🎨 Applying theme: ${theme}`);
   
@@ -220,8 +220,27 @@ export function handleSettingsKeyPress(event) {
     return false;
   }
   
+  // Create a proper event-like object if we just got a key string
+  let eventObj = event;
+  if (typeof event === 'string') {
+    eventObj = { 
+      key: event,
+      preventDefault: () => {},
+      stopPropagation: () => {},
+      stopImmediatePropagation: () => {}
+    };
+  } else if (event && !event.preventDefault) {
+    // Handle objects like { key: 'ArrowDown' }
+    eventObj = {
+      ...event,
+      preventDefault: () => {},
+      stopPropagation: () => {},
+      stopImmediatePropagation: () => {}
+    };
+  }
+  
   // Let the settings navigation handle the key
-  return settingsNavigation.handleKeyPress(event);
+  return settingsNavigation.handleKeyPress(eventObj);
 }
 
 // LEGACY COMPATIBILITY: Functions for existing code
