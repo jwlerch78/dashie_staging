@@ -97,10 +97,16 @@ async function handleUnifiedInput(action, originalEvent = null) {
     return;
   }
   
-  
   // Prevent default if we have an original event
   if (originalEvent) {
     originalEvent.preventDefault();
+  }
+  
+  // NEW: Check if settings modal is open and let it handle events
+  const settingsOverlay = document.querySelector('.settings-overlay.active');
+  if (settingsOverlay) {
+    console.log('🎮 Settings modal is open, letting it handle input');
+    return; // Let settings modal handle its own navigation
   }
   
   // Handle special actions first
@@ -118,21 +124,19 @@ async function handleUnifiedInput(action, originalEvent = null) {
     return;
   }
   
-// Handle settings modal - UPDATED for new settings system
-try {
-  const { isSettingsReady, handleSettingsKeyPress } = await import('../settings/settings-main.js');
-  
-  // Check if settings is open by trying to handle the key press
-  const settingsHandled = handleSettingsKeyPress({ key: action });
-  
-  if (settingsHandled) {
-    // Settings navigation handled the input
-    return;
+  // Handle settings modal - UPDATED for new settings system
+  try {
+    const { isSettingsReady, handleSettingsKeyPress } = await import('../settings/settings-main.js');
+    
+    // Check if settings is open by looking for the overlay
+    if (settingsOverlay) {
+      console.log('🎮 Delegating to settings system');
+      return; // Settings will handle their own events
+    }
+  } catch (err) {
+    // Settings module not loaded yet, continue
+    console.log('Settings system not ready, continuing with normal navigation');
   }
-} catch (err) {
-  // Settings module not loaded yet, continue
-  console.log('Settings system not ready, continuing with normal navigation');
-}
   
   // Handle exit confirmation dialog
   if (state.confirmDialog) {
@@ -204,7 +208,6 @@ try {
       break;
   }
 }
-
 // Helper function for sleep toggle
 async function handleSleepToggle() {
   const { state } = await import('./state.js');

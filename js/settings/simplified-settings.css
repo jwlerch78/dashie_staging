@@ -1,0 +1,311 @@
+/* js/settings/simplified-settings.css */
+/* Add this CSS file and include it in your main CSS or index.html */
+
+/* Theme variables - will be overridden by body classes */
+:root {
+  --bg-primary: #222;
+  --bg-secondary: #333;
+  --text-primary: #fff;
+  --text-secondary: #ccc;
+  --text-muted: #999;
+  --accent-orange: #ffaa00;
+  --accent-blue: #00aaff;
+  --outline-selected: var(--accent-orange);
+  --outline-focused: var(--accent-blue);
+  --border-radius: 8px;
+  --border-radius-small: 4px;
+  --transition-fast: 0.2s ease;
+}
+
+/* Dark Theme (default) */
+body.theme-dark,
+body:not([class*="theme-"]) {
+  --bg-primary: #222;
+  --bg-secondary: #333;
+  --text-primary: #fff;
+  --text-secondary: #ccc;
+  --text-muted: #999;
+}
+
+/* Light Theme */
+body.theme-light {
+  --bg-primary: #FCFCFF;
+  --bg-secondary: #FCFCFF;
+  --text-primary: #424242;
+  --text-secondary: #616161;
+  --text-muted: #9e9e9e;
+}
+
+/* Settings Modal */
+.settings-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  opacity: 0;
+  visibility: hidden;
+  transition: all var(--transition-fast);
+}
+
+.settings-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.settings-modal {
+  width: 90vw;
+  max-width: 800px;
+  height: 80vh;
+  max-height: 600px;
+  background: var(--bg-primary);
+  border-radius: var(--border-radius);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* Header with Tabs */
+.settings-header {
+  background: var(--bg-secondary);
+  padding: 15px 25px 0;
+  border-bottom: 1px solid var(--text-muted);
+}
+
+.settings-title {
+  margin: 0 0 12px 0;
+  font-size: 20px;
+  color: var(--text-primary);
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border-bottom: 2px solid var(--bg-primary);
+}
+
+.tab-button {
+  background: transparent;
+  border: none;
+  padding: 8px 18px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: var(--border-radius-small) var(--border-radius-small) 0 0;
+  transition: all var(--transition-fast);
+  position: relative;
+}
+
+.tab-button:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.tab-button.active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--accent-orange);
+}
+
+.tab-button.focused {
+  outline: 2px solid var(--outline-focused);
+  outline-offset: 2px;
+}
+
+.tab-button.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  color: var(--text-muted);
+}
+
+/* Content Area */
+.settings-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 25px;
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+/* Settings Groups */
+.settings-group {
+  margin-bottom: 20px;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  padding: 15px;
+}
+
+.group-title {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  color: var(--accent-orange);
+  border-bottom: 1px solid rgba(255, 170, 0, 0.3);
+  padding: 6px 0;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+}
+
+.group-title:hover {
+  background: rgba(255, 170, 0, 0.1);
+  margin: 0 -15px 10px -15px;
+  padding: 6px 15px;
+  border-radius: var(--border-radius-small);
+}
+
+.group-title.focused {
+  outline: 2px solid var(--outline-focused);
+  outline-offset: 2px;
+  border-radius: var(--border-radius-small);
+}
+
+.group-title .expand-arrow {
+  font-size: 12px;
+  transition: transform var(--transition-fast);
+  color: var(--text-muted);
+}
+
+.group-title.expanded .expand-arrow {
+  transform: rotate(90deg);
+}
+
+.group-content {
+  overflow: hidden;
+  transition: max-height var(--transition-fast), opacity var(--transition-fast);
+}
+
+.group-content.collapsed {
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
+}
+
+.group-content.expanded {
+  max-height: 500px;
+  opacity: 1;
+}
+
+/* Settings Rows */
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding: 6px 0;
+}
+
+.setting-row:last-child {
+  margin-bottom: 0;
+}
+
+.setting-label {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-primary);
+  margin-right: 15px;
+}
+
+.setting-control {
+  flex: 0 0 180px;
+}
+
+.setting-description {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Form Controls */
+.form-control {
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  border: 2px solid var(--text-muted);
+  border-radius: var(--border-radius-small);
+  color: var(--text-primary);
+  font-size: 14px;
+  transition: all var(--transition-fast);
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--outline-focused);
+  box-shadow: 0 0 0 2px rgba(0, 170, 255, 0.3);
+}
+
+.form-control.selected {
+  border-color: var(--outline-selected);
+  box-shadow: 0 0 0 2px rgba(255, 170, 0, 0.4);
+}
+
+/* Footer */
+.settings-footer {
+  background: var(--bg-secondary);
+  padding: 12px 25px;
+  border-top: 1px solid var(--text-muted);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--border-radius-small);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-primary {
+  background: var(--accent-orange);
+  color: var(--bg-primary);
+}
+
+.btn-secondary {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 2px solid var(--text-muted);
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn.selected {
+  outline: 2px solid var(--outline-focused);
+  outline-offset: 2px;
+}
+
+/* Coming Soon */
+.coming-soon {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+}
+
+.coming-soon h3 {
+  margin: 0 0 15px 0;
+  color: var(--text-primary);
+}
+
+/* Smooth theme transitions */
+* {
+  transition: background-color var(--transition-fast), 
+              color var(--transition-fast), 
+              border-color var(--transition-fast);
+}

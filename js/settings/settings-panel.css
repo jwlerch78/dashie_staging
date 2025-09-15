@@ -10,51 +10,48 @@
 }
 
 /* Panel Header */
+/* Simplified panel header - no description */
 .panel-header {
-  margin-bottom: 30px;
+  margin-bottom: 20px; /* Reduced from 30px */
   border-bottom: 1px solid var(--text-muted);
-  padding-bottom: 20px;
+  padding-bottom: 15px; /* Reduced from 20px */
 }
 
 .panel-header h2 {
-  margin: 0 0 10px 0;
-  font-size: 28px;
+  margin: 0;
+  font-size: 24px; /* Reduced from 28px */
   font-weight: 600;
   color: var(--text-primary);
-  display: flex;
-  align-items: center;
-  gap: 10px;
 }
 
+/* Remove the panel description */
 .panel-description {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 16px;
-  line-height: 1.4;
+  display: none;
 }
 
 /* Panel Content */
 .panel-content {
   display: flex;
   flex-direction: column;
-  gap: 40px;
+  gap: 20px; /* Reduced from 40px */
 }
 
 /* Settings Sections */
 .settings-section {
   background: var(--bg-secondary);
   border-radius: var(--border-radius);
-  padding: 25px;
+  padding: 20px; /* Reduced from 25px */
   border: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 20px; /* Reduced from 40px in panel-content gap */
 }
 
 .settings-section h3 {
-  margin: 0 0 20px 0;
-  font-size: 20px;
+  margin: 0 0 15px 0; /* Reduced from 20px */
+  font-size: 18px; /* Reduced from 20px */
   font-weight: 500;
   color: var(--accent-orange);
   border-bottom: 1px solid rgba(255, 170, 0, 0.3);
-  padding-bottom: 10px;
+  padding-bottom: 8px;
 }
 
 /* Settings Rows */
@@ -62,8 +59,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
-  padding: 15px 0;
+  margin-bottom: 12px; /* Reduced from 20px */
+  padding: 8px 0; /* Reduced from 15px */
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 

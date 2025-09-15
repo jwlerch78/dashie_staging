@@ -133,12 +133,12 @@
 /* FIXED: Use theme variables for selection highlighting */
 .category-item.selected {
   background: var(--bg-active);
-  outline: 2px solid var(--outline-focused); /* Use blue for focused, not selected */
+  outline: 2px solid var(--outline-selected); /* Use orange like main sidebar */
   outline-offset: 2px;
 }
 
 .category-item.active {
-  background: var(--accent-orange);
+  background: var(--accent-orange); /* Keep orange for active state */
   color: var(--bg-primary);
 }
 

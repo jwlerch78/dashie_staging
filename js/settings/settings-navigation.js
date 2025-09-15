@@ -159,114 +159,146 @@ export class SettingsNavigation {
     }
   }, true);
 }
-  // Load panel instances
-  async loadPanels() {
-    try {
-      // Load display panel (the only one we have for now)
-      const { DisplaySettingsPanel } = await import('./panels/settings-display.js');
-      const displayPanel = new DisplaySettingsPanel(this.controller);
-      const displayElement = displayPanel.render();
-      
-      // Add to container
-      const container = this.element.querySelector('.settings-panel-container');
-      container.appendChild(displayElement);
-      
-      // Store panel instance
-      this.panels.set('display', displayPanel);
-      this.panels.set('widgets', displayPanel); // Use display panel for widgets too since it has photos
-      
-      console.log('⚙️ 🎨 Display panel loaded');
-      
-    } catch (error) {
-      console.error('⚙️ ❌ Failed to load settings panels:', error);
-    }
+
+  // Fix for js/settings/settings-navigation.js
+// Update the loadPanels method to avoid duplicate references:
+
+async loadPanels() {
+  try {
+    // Load display panel (the only one we have for now)
+    const { DisplaySettingsPanel } = await import('./panels/settings-display.js');
+    const displayPanel = new DisplaySettingsPanel(this.controller);
+    const displayElement = displayPanel.render();
+    
+    // Add to container
+    const container = this.element.querySelector('.settings-panel-container');
+    container.appendChild(displayElement);
+    
+    // Store panel instance - ONLY ONCE to avoid duplicate hiding
+    this.panels.set('display', displayPanel);
+    // Don't map widgets to the same panel - create a separate one or handle differently
+    
+    console.log('⚙️ 🎨 Display panel loaded');
+    
+  } catch (error) {
+    console.error('⚙️ ❌ Failed to load settings panels:', error);
   }
+}
 
   // Handle keyboard navigation
-  handleKeyPress(event) {
-    if (!this.isVisible) return;
+ handleKeyPress(event) {
+  if (!this.isVisible) return;
 
-    const { key } = event;
-    let handled = false;
-
-    // Always handle Escape to close
-    if (key === 'Escape') {
-      this.hide();
-      handled = true;
-    } else if (this.currentPanel === 'categories') {
-      handled = this.handleCategoryNavigation(key);
-    } else if (this.currentPanel === 'settings') {
-      handled = this.handleSettingsNavigation(key);
-    }
-
-    if (handled) {
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-    }
-
-    return handled;
+  const { key } = event;
+  
+  // Convert Arrow keys to project standard
+  let direction = key;
+  switch (key) {
+    case 'ArrowUp': direction = 'up'; break;
+    case 'ArrowDown': direction = 'down'; break;
+    case 'ArrowLeft': direction = 'left'; break;
+    case 'ArrowRight': direction = 'right'; break;
+    case 'Enter': direction = 'enter'; break;
+    case 'Escape': direction = 'escape'; break;
+    default: direction = key; break;
   }
+  
+  console.log(`⚙️ 🎹 Key pressed: "${key}" -> direction: "${direction}", current panel: ${this.currentPanel}`);
+  
+  let handled = false;
+
+  if (direction === 'escape') {
+    this.hide();
+    handled = true;
+  } else if (this.currentPanel === 'categories') {
+    handled = this.handleCategoryNavigation(direction);
+  } else if (this.currentPanel === 'settings') {
+    handled = this.handleSettingsNavigation(direction);
+  }
+
+  if (handled) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+  }
+
+  return handled;
+}
 
   // Handle navigation within categories panel
-  handleCategoryNavigation(key) {
-    const enabledCategories = this.categories.filter(cat => cat.enabled);
-    const currentEnabledIndex = enabledCategories.findIndex(cat => 
-      cat === this.categories[this.currentCategoryIndex]
-    );
-    
-    switch (key) {
-      case 'ArrowUp':
-        if (currentEnabledIndex > 0) {
-          const prevCategory = enabledCategories[currentEnabledIndex - 1];
-          this.currentCategoryIndex = this.categories.indexOf(prevCategory);
-          this.updateCategoryFocus();
-        }
-        return true;
-        
-      case 'ArrowDown':
-        if (currentEnabledIndex < enabledCategories.length - 1) {
-          const nextCategory = enabledCategories[currentEnabledIndex + 1];
-          this.currentCategoryIndex = this.categories.indexOf(nextCategory);
-          this.updateCategoryFocus();
-        }
-        return true;
-        
-      case 'ArrowRight':
-      case 'Enter':
-        const selectedCategory = this.categories[this.currentCategoryIndex];
-        if (selectedCategory && selectedCategory.enabled) {
-          this.selectCategory(selectedCategory.id);
-        }
-        return true;
-        
-      default:
-        return false;
-    }
+handleCategoryNavigation(direction) {
+  const enabledCategories = this.categories.filter(cat => cat.enabled);
+  const currentEnabledIndex = enabledCategories.findIndex(cat => 
+    cat === this.categories[this.currentCategoryIndex]
+  );
+  
+  console.log(`⚙️ 📂 Category navigation: "${direction}"`);
+  
+  switch (direction) {
+    case 'up':
+      if (currentEnabledIndex > 0) {
+        const prevCategory = enabledCategories[currentEnabledIndex - 1];
+        this.currentCategoryIndex = this.categories.indexOf(prevCategory);
+        this.updateCategoryFocus();
+      }
+      return true;
+      
+    case 'down':
+      if (currentEnabledIndex < enabledCategories.length - 1) {
+        const nextCategory = enabledCategories[currentEnabledIndex + 1];
+        this.currentCategoryIndex = this.categories.indexOf(nextCategory);
+        this.updateCategoryFocus();
+      }
+      return true;
+      
+    case 'right':
+    case 'enter':
+      const selectedCategory = this.categories[this.currentCategoryIndex];
+      if (selectedCategory && selectedCategory.enabled) {
+        this.selectCategory(selectedCategory.id);
+      }
+      return true;
+      
+    default:
+      return false;
   }
+}
+
 
   // Handle navigation within settings panel
-  handleSettingsNavigation(key) {
-    const currentCategory = this.getCurrentCategory();
-    const panel = this.panels.get(currentCategory?.id);
-    
-    if (panel && panel.handleNavigation) {
-      const handled = panel.handleNavigation(key);
-      if (handled) return true;
+handleSettingsNavigation(direction) {
+  console.log(`⚙️ 🔍 Settings navigation received direction: "${direction}"`);
+  
+  const currentCategory = this.getCurrentCategory();
+  const panel = this.panels.get(currentCategory?.id);
+  
+  console.log(`⚙️ 🔍 Current category: ${currentCategory?.id}, panel exists: ${!!panel}`);
+  
+  // Let the panel handle navigation first
+  if (panel && panel.handleNavigation) {
+    console.log(`⚙️ 🔍 Calling panel.handleNavigation("${direction}")`);
+    const handled = panel.handleNavigation(direction);
+    console.log(`⚙️ 🔍 Panel handleNavigation returned: ${handled}`);
+    if (handled) {
+      console.log(`⚙️ ✅ Panel handled navigation: ${direction}`);
+      return true;
     }
-    
-    // Handle panel-level navigation
-    switch (key) {
-      case 'ArrowLeft':
-        // Go back to categories
-        this.currentPanel = 'categories';
-        this.updatePanelFocus();
-        return true;
-        
-      default:
-        return false;
-    }
+    console.log(`⚙️ ❌ Panel did not handle navigation: ${direction}`);
   }
+  
+  // Handle panel-level navigation if the panel didn't handle it
+  switch (direction) {
+    case 'left':
+      console.log('⚙️ 🔙 Going back to categories');
+      this.currentPanel = 'categories';
+      this.updatePanelFocus();
+      return true;
+      
+    default:
+      console.log(`⚙️ ❌ Settings navigation ignoring: ${direction}`);
+      return false;
+  }
+}
 
 handleCategoryClick(event) {
   // CRITICAL: Stop event from bubbling to main app
@@ -293,31 +325,32 @@ handleCategoryClick(event) {
     this.hide();
   }
 
-  // Select a category and show its panel
-  selectCategory(categoryId) {
-    const category = this.categories.find(cat => cat.id === categoryId);
-    if (!category || !category.enabled) return;
+// Select a category and show its panel
+selectCategory(categoryId) {
+  const category = this.categories.find(cat => cat.id === categoryId);
+  if (!category || !category.enabled) return;
 
-    console.log(`⚙️ 📂 Selecting category: ${categoryId}`);
+  console.log(`⚙️ 📂 Selecting category: ${categoryId}`);
 
-    // Hide all panels
-    this.hideAllPanels();
+  // Hide all panels first
+  this.hideAllPanels();
 
-    // Show selected panel
-    const panel = this.panels.get(categoryId);
-    if (panel) {
-      panel.show();
-      this.currentPanel = 'settings';
-      this.updatePanelFocus();
-    } else {
-      console.warn(`⚙️ ⚠️ No panel found for category: ${categoryId}`);
-      // Show a "Coming Soon" message for unimplemented panels
-      this.showComingSoon(category.label);
-    }
-
-    // Update category visual state
-    this.updateCategorySelection(categoryId);
+  // Show selected panel
+  const panel = this.panels.get(categoryId);
+  if (panel) {
+    console.log(`⚙️ 🎨 Found panel for ${categoryId}, calling show()`);
+    panel.show();
+    this.currentPanel = 'settings';
+    this.updatePanelFocus();
+  } else {
+    console.warn(`⚙️ ⚠️ No panel found for category: ${categoryId}`);
+    // Show a "Coming Soon" message for unimplemented panels
+    this.showComingSoon(category.label);
   }
+
+  // Update category visual state
+  this.updateCategorySelection(categoryId);
+}
 
   // Show coming soon message for unimplemented panels
   showComingSoon(categoryName) {
@@ -334,16 +367,27 @@ handleCategoryClick(event) {
     container.appendChild(comingSoon);
   }
 
-  // Hide all panels
-  hideAllPanels() {
-    this.panels.forEach(panel => {
-      if (panel.hide) panel.hide();
-    });
-    
-    // Also remove any coming soon messages
-    const comingSoon = this.element.querySelector('.settings-coming-soon');
-    if (comingSoon) comingSoon.remove();
+// Update hideAllPanels to use Set to avoid duplicates:
+hideAllPanels() {
+  console.log('⚙️ 👁️ Hiding all panels');
+  
+  // Use Set to avoid calling hide() on the same panel multiple times
+  const uniquePanels = new Set(this.panels.values());
+  
+  uniquePanels.forEach((panel, index) => {
+    console.log(`⚙️ 👁️ Hiding unique panel: ${index}`);
+    if (panel.hide) {
+      panel.hide();
+    }
+  });
+  
+  // Also remove any coming soon messages
+  const comingSoon = this.element.querySelector('.settings-coming-soon');
+  if (comingSoon) {
+    console.log('⚙️ 👁️ Removing coming soon message');
+    comingSoon.remove();
   }
+}
 
   // Update category selection visual state
   updateCategorySelection(selectedId) {

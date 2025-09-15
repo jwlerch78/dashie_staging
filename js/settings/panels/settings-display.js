@@ -7,6 +7,7 @@ export class DisplaySettingsPanel {
     this.element = null;
     this.focusableElements = [];
     this.currentFocus = 0;
+    this.hideTimeout = null; // Track hide timeout
     
     // Setting paths for easy reference
     this.settings = {
@@ -19,104 +20,106 @@ export class DisplaySettingsPanel {
   }
 
   // Create the panel HTML
-  render() {
-    const container = document.createElement('div');
-    container.className = 'settings-panel display-panel';
-    
-    // Get current values
-    const theme = this.controller.getSetting(this.settings.theme) || 'dark';
-    const sleepTime = this.controller.getSetting(this.settings.sleepTime) || '22:00';
-    const wakeTime = this.controller.getSetting(this.settings.wakeTime) || '07:00';
-    const reSleepDelay = this.controller.getSetting(this.settings.reSleepDelay) || 30;
-    const photosTransition = this.controller.getSetting(this.settings.photosTransition) || 5;
-    
-    container.innerHTML = `
-      <div class="panel-header">
-        <h2>🎨 Display & Photos</h2>
-        <p class="panel-description">Configure theme, sleep settings, and photo transitions</p>
-      </div>
-      
-      <div class="panel-content">
-        <!-- Theme Selection -->
-        <div class="settings-section">
-          <h3>Theme</h3>
-          <div class="settings-row">
-            <label class="settings-label">Display Theme</label>
-            <div class="settings-control">
-              <select class="theme-select focusable" data-setting="${this.settings.theme}">
-                <option value="dark" ${theme === 'dark' ? 'selected' : ''}>Dark Theme</option>
-                <option value="light" ${theme === 'light' ? 'selected' : ''}>Light Theme</option>
-              </select>
-            </div>
-          </div>
-        </div>
+ // Fix for js/settings/panels/settings-display.js
+// Update the render method with better spacing and simplified header:
 
-        <!-- Sleep Settings -->
-        <div class="settings-section">
-          <h3>Sleep Mode</h3>
-          <div class="settings-row">
-            <label class="settings-label">Sleep Time</label>
-            <div class="settings-control">
-              <input type="time" 
-                     class="time-input focusable" 
-                     data-setting="${this.settings.sleepTime}"
-                     value="${sleepTime}">
-              <span class="setting-description">When display goes to sleep</span>
-            </div>
-          </div>
-          
-          <div class="settings-row">
-            <label class="settings-label">Wake Time</label>
-            <div class="settings-control">
-              <input type="time" 
-                     class="time-input focusable" 
-                     data-setting="${this.settings.wakeTime}"
-                     value="${wakeTime}">
-              <span class="setting-description">When display wakes up</span>
-            </div>
-          </div>
-          
-          <div class="settings-row">
-            <label class="settings-label">Re-sleep Delay</label>
-            <div class="settings-control">
-              <input type="number" 
-                     class="number-input focusable" 
-                     data-setting="${this.settings.reSleepDelay}"
-                     value="${reSleepDelay}"
-                     min="1" 
-                     max="120"
-                     step="1">
-              <span class="setting-description">Minutes before auto-sleep after wake</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Photos Settings -->
-        <div class="settings-section">
-          <h3>Photos Widget</h3>
-          <div class="settings-row">
-            <label class="settings-label">Transition Time</label>
-            <div class="settings-control">
-              <input type="number" 
-                     class="number-input focusable" 
-                     data-setting="${this.settings.photosTransition}"
-                     value="${photosTransition}"
-                     min="1" 
-                     max="60"
-                     step="1">
-              <span class="setting-description">Seconds between photo changes</span>
-            </div>
+render() {
+  const container = document.createElement('div');
+  container.className = 'settings-panel display-panel';
+  
+  // Get current values
+  const theme = this.controller.getSetting(this.settings.theme) || 'dark';
+  const sleepTime = this.controller.getSetting(this.settings.sleepTime) || '22:00';
+  const wakeTime = this.controller.getSetting(this.settings.wakeTime) || '07:00';
+  const reSleepDelay = this.controller.getSetting(this.settings.reSleepDelay) || 30;
+  const photosTransition = this.controller.getSetting(this.settings.photosTransition) || 5;
+  
+  container.innerHTML = `
+    <div class="panel-header">
+      <h2>Display</h2>
+    </div>
+    
+    <div class="panel-content">
+      <!-- Theme Selection -->
+      <div class="settings-section">
+        <h3>Theme</h3>
+        <div class="settings-row">
+          <label class="settings-label">Display Theme</label>
+          <div class="settings-control">
+            <select class="theme-select focusable" data-setting="${this.settings.theme}">
+              <option value="dark" ${theme === 'dark' ? 'selected' : ''}>Dark Theme</option>
+              <option value="light" ${theme === 'light' ? 'selected' : ''}>Light Theme</option>
+            </select>
           </div>
         </div>
       </div>
-    `;
-    
-    this.element = container;
-    this.setupEventListeners();
-    this.updateFocusableElements();
-    
-    return container;
-  }
+
+      <!-- Sleep Settings -->
+      <div class="settings-section">
+        <h3>Sleep Mode</h3>
+        <div class="settings-row">
+          <label class="settings-label">Sleep Time</label>
+          <div class="settings-control">
+            <input type="time" 
+                   class="time-input focusable" 
+                   data-setting="${this.settings.sleepTime}"
+                   value="${sleepTime}">
+            <span class="setting-description">When display goes to sleep</span>
+          </div>
+        </div>
+        
+        <div class="settings-row">
+          <label class="settings-label">Wake Time</label>
+          <div class="settings-control">
+            <input type="time" 
+                   class="time-input focusable" 
+                   data-setting="${this.settings.wakeTime}"
+                   value="${wakeTime}">
+            <span class="setting-description">When display wakes up</span>
+          </div>
+        </div>
+        
+        <div class="settings-row">
+          <label class="settings-label">Re-sleep Delay</label>
+          <div class="settings-control">
+            <input type="number" 
+                   class="number-input focusable" 
+                   data-setting="${this.settings.reSleepDelay}"
+                   value="${reSleepDelay}"
+                   min="1" 
+                   max="120"
+                   step="1">
+            <span class="setting-description">Minutes before auto-sleep after wake</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Photos Settings -->
+      <div class="settings-section">
+        <h3>Photos Widget</h3>
+        <div class="settings-row">
+          <label class="settings-label">Transition Time</label>
+          <div class="settings-control">
+            <input type="number" 
+                   class="number-input focusable" 
+                   data-setting="${this.settings.photosTransition}"
+                   value="${photosTransition}"
+                   min="1" 
+                   max="60"
+                   step="1">
+            <span class="setting-description">Seconds between photo changes</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  this.element = container;
+  this.setupEventListeners();
+  this.updateFocusableElements();
+  
+  return container;
+}
 
   // Set up event listeners for the panel
   setupEventListeners() {
@@ -160,67 +163,98 @@ export class DisplaySettingsPanel {
     });
   }
 
-  // Update the list of focusable elements
-  updateFocusableElements() {
-    if (!this.element) return;
-    
-    this.focusableElements = Array.from(
-      this.element.querySelectorAll('.focusable')
-    ).filter(el => !el.disabled);
+// Make sure updateFocusableElements finds all the elements
+updateFocusableElements() {
+  if (!this.element) return;
+  
+  this.focusableElements = Array.from(
+    this.element.querySelectorAll('.focusable')
+  ).filter(el => !el.disabled);
+  
+  console.log(`🎨 Found ${this.focusableElements.length} focusable elements:`, 
+    this.focusableElements.map(el => `${el.tagName}[${el.type || 'select'}]`));
+}
+
+// Fix for js/settings/panels/settings-display.js
+// Use the project's standard navigation keys: 'up', 'down', 'left', 'right'
+
+handleNavigation(direction) {
+  if (!this.element || this.focusableElements.length === 0) {
+    console.log(`🎨 Navigation blocked: element=${!!this.element}, focusableCount=${this.focusableElements.length}`);
+    return false;
   }
 
-  // Handle D-pad navigation within the panel
-  handleNavigation(direction) {
-    if (!this.element || this.focusableElements.length === 0) return false;
-
-    let handled = false;
-    
-    switch (direction) {
-      case 'up':
-        if (this.currentFocus > 0) {
-          this.currentFocus--;
+  let handled = false;
+  const oldFocus = this.currentFocus;
+  
+  console.log(`🎨 Display panel navigation: "${direction}", current focus: ${this.currentFocus}/${this.focusableElements.length - 1}`);
+  
+  // Use project standard: 'up', 'down', 'left', 'right', 'enter'
+  switch (direction) {
+    case 'up':
+      if (this.currentFocus > 0) {
+        this.currentFocus--;
+        handled = true;
+        console.log(`🎨 ✅ Moved up from ${oldFocus} to ${this.currentFocus}`);
+      } else {
+        console.log(`🎨 ❌ Already at top (${this.currentFocus})`);
+      }
+      break;
+      
+    case 'down':
+      if (this.currentFocus < this.focusableElements.length - 1) {
+        this.currentFocus++;
+        handled = true;
+        console.log(`🎨 ✅ Moved down from ${oldFocus} to ${this.currentFocus}`);
+      } else {
+        console.log(`🎨 ❌ Already at bottom (${this.currentFocus}/${this.focusableElements.length - 1})`);
+      }
+      break;
+      
+    case 'left':
+    case 'right':
+      // Handle left/right for select elements and number inputs
+      const currentElement = this.focusableElements[this.currentFocus];
+      if (currentElement) {
+        if (currentElement.type === 'select-one') {
+          this.adjustSelectValue(currentElement, direction);
           handled = true;
-        }
-        break;
-        
-      case 'down':
-        if (this.currentFocus < this.focusableElements.length - 1) {
-          this.currentFocus++;
+          console.log(`🎨 ✅ Adjusted select value for element ${this.currentFocus}`);
+        } else if (currentElement.type === 'number') {
+          this.adjustNumberValue(currentElement, direction);
           handled = true;
+          console.log(`🎨 ✅ Adjusted number value for element ${this.currentFocus}`);
+        } else {
+          console.log(`🎨 ❌ Element ${this.currentFocus} (${currentElement.type}) doesn't handle left/right`);
         }
-        break;
-        
-      case 'left':
-      case 'right':
-        // Handle left/right for select elements and number inputs
-        const currentElement = this.focusableElements[this.currentFocus];
-        if (currentElement) {
-          if (currentElement.type === 'select-one') {
-            this.adjustSelectValue(currentElement, direction);
-            handled = true;
-          } else if (currentElement.type === 'number') {
-            this.adjustNumberValue(currentElement, direction);
-            handled = true;
-          }
-        }
-        break;
-        
-      case 'enter':
-        const element = this.focusableElements[this.currentFocus];
-        if (element) {
-          element.click();
-          handled = true;
-        }
-        break;
-    }
-    
-    if (handled) {
-      this.updateFocus();
-    }
-    
-    return handled;
+      }
+      break;
+      
+    case 'enter':
+      const element = this.focusableElements[this.currentFocus];
+      if (element) {
+        element.click();
+        handled = true;
+        console.log(`🎨 ✅ Clicked element ${this.currentFocus}`);
+      }
+      break;
+      
+    default:
+      console.log(`🎨 ❌ UNMATCHED direction: "${direction}"`);
+      console.log(`🎨 Available cases: up, down, left, right, enter`);
+      break;
   }
-
+  
+  if (handled) {
+    this.updateFocus();
+    this.updateFocusStyles();
+    console.log(`🎨 ✅ Navigation handled successfully, new focus: ${this.currentFocus}`);
+  } else {
+    console.log(`🎨 ❌ Navigation not handled for: "${direction}"`);
+  }
+  
+  return handled;
+}
   // Adjust select value with left/right
   adjustSelectValue(selectElement, direction) {
     const options = Array.from(selectElement.options);
@@ -259,12 +293,14 @@ export class DisplaySettingsPanel {
     numberElement.dispatchEvent(new Event('input'));
   }
 
-  // Update focus to current element
-  updateFocus() {
-    if (this.focusableElements[this.currentFocus]) {
-      this.focusableElements[this.currentFocus].focus();
-    }
+// Enhanced focus update with better logging
+updateFocus() {
+  if (this.focusableElements[this.currentFocus]) {
+    const element = this.focusableElements[this.currentFocus];
+    element.focus();
+    console.log(`🎨 Focused element: ${element.tagName}[${element.type || 'select'}] - ${element.dataset.setting}`);
   }
+}
 
   // Update focus styles
   updateFocusStyles() {
@@ -343,22 +379,54 @@ export class DisplaySettingsPanel {
     );
   }
 
-  // Show the panel
-  show() {
-    if (this.element) {
-      this.element.style.display = 'block';
-      this.updateFocusableElements();
-      
-      // Focus first element
-      this.currentFocus = 0;
-      this.updateFocus();
+// Show the panel with proper focus setup
+show() {
+  if (this.element) {
+    // Cancel any pending hide timeout
+    if (this.hideTimeout) {
+      clearTimeout(this.hideTimeout);
+      this.hideTimeout = null;
+      console.log('🎨 Cancelled pending hide timeout');
     }
+    
+    this.element.style.display = 'block';
+    this.element.classList.add('active');
+    
+    // Update focusable elements and set initial focus
+    this.updateFocusableElements();
+    this.currentFocus = 0;
+    
+    // Small delay to ensure element is visible before focusing
+    setTimeout(() => {
+      this.updateFocus();
+      this.updateFocusStyles();
+    }, 50);
+    
+    console.log('🎨 Display panel shown with focus setup');
   }
-
-  // Hide the panel
+}
+  
+ // Hide the panel
   hide() {
     if (this.element) {
-      this.element.style.display = 'none';
+      // Cancel any existing hide timeout
+      if (this.hideTimeout) {
+        clearTimeout(this.hideTimeout);
+        this.hideTimeout = null;
+      }
+      
+      // Remove the active class to trigger CSS transition
+      this.element.classList.remove('active');
+      
+      // Hide after transition completes
+      this.hideTimeout = setTimeout(() => {
+        if (this.element) {
+          this.element.style.display = 'none';
+        }
+        this.hideTimeout = null;
+      }, 300); // Match CSS transition duration
+      
+      console.log('🎨 Display panel hidden');
     }
   }
 
