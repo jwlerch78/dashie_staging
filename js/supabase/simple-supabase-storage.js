@@ -72,8 +72,10 @@ getGoogleAccessToken() {
   return null;
 }
 
+  
 // Get Supabase auth token from Google OAuth via Edge Function
-async ensureSupabaseAuth() {
+// Updated to use dev or prod edge server
+  async ensureSupabaseAuth() {
   if (this.supabaseAuthToken) {
     return this.supabaseAuthToken; // Already authenticated
   }
@@ -96,12 +98,25 @@ async ensureSupabaseAuth() {
     console.log('🔐 Google token length:', googleToken.length);
     console.log('🔐 Google token preview:', googleToken.substring(0, 30) + '...');
 
-    // Call your Edge Function (adding auth header due to Supabase requirements)
-    const response = await fetch(`https://cseaywxcvnxcsypaqaid.supabase.co/functions/v1/hyper-responder`, {
+    // Dynamically determine Edge Function URL based on environment
+    const getEdgeFunctionUrl = () => {
+      const config = window.currentDbConfig;
+      const edgeUrl = config.supabaseEdgeUrl;
+      
+      return edgeUrl;
+    };
+
+    const edgeFunctionUrl = getEdgeFunctionUrl();
+    console.log('🔐 Using Edge Function URL:', edgeFunctionUrl);
+
+    // Use the environment-appropriate auth token
+    const authToken = window.currentDbConfig.supabaseKey;
+
+    const response = await fetch(edgeFunctionUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzZWF5d3hjdm54Y3N5cGFxYWlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc2MDIxOTEsImV4cCI6MjA3MzE3ODE5MX0.Wnd7XELrtPIDKeTcHVw7dl3awn3BlI0z9ADKPgSfHhA`
+        'Authorization': `Bearer ${authToken}`
       },
       body: JSON.stringify({
         googleToken: googleToken,
@@ -147,6 +162,8 @@ async ensureSupabaseAuth() {
     return null;
   }
 }
+
+  
   // Save settings with hybrid approach (local + cloud)
   async saveSettings(settings) {
     console.log('💾 Saving settings for user:', this.userId);

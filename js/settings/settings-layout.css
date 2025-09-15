@@ -1,5 +1,5 @@
-/* js/settings/settings-layout.css - UPDATED */
-/* Two-panel settings layout with corrected theme matching and compact spacing */
+/* js/ui/settings/settings-layout.css - UPDATED */
+/* Two-panel settings layout with category sidebar and settings panel */
 
 /* Main Settings Container - Takes up most of the screen */
 .settings-overlay {
@@ -8,8 +8,8 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--bg-modal-backdrop);
-  z-index: var(--z-modal);
+  background: rgba(0, 0, 0, 0.95);
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -31,56 +31,51 @@
   background: var(--bg-primary);
   border-radius: var(--border-radius);
   display: flex;
+  flex-direction: row;
   overflow: hidden;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  border: 1px solid var(--text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Left Panel - Categories - MATCH SIDEBAR THEME */
+/* Left Panel - Categories (THEMED LIKE MAIN SIDEBAR) */
 .settings-sidebar {
   width: 350px;
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--text-muted);
+  min-width: 350px;
+  background: var(--bg-primary); /* Use same bg as main sidebar */
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  /* Match main dashboard sidebar styling */
-  background: linear-gradient(
-    to right,
-    var(--bg-secondary) 0%,
-    var(--bg-secondary) 40%,
-    var(--bg-primary-semi-transparent) 100%
-  );
 }
 
 .settings-sidebar-header {
-  padding: 20px 20px 15px 20px; /* REDUCED padding */
-  border-bottom: 1px solid var(--text-muted);
+  padding: 30px 25px 20px 25px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   background: var(--bg-primary);
   position: relative;
 }
 
 .settings-sidebar-header h1 {
   margin: 0;
-  font-size: 22px; /* Slightly smaller */
+  font-size: 24px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .settings-sidebar-header .close-btn {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 15px;
+  right: 15px;
   background: transparent;
   border: none;
   color: var(--text-muted);
-  font-size: 20px; /* Smaller close button */
+  font-size: 24px;
   cursor: pointer;
-  padding: 4px;
+  padding: 5px;
   border-radius: 4px;
   transition: all var(--transition-fast);
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -88,193 +83,183 @@
 
 .settings-sidebar-header .close-btn:hover {
   color: var(--text-primary);
-  background: var(--bg-active);
+  background: rgba(255, 255, 255, 0.1);
 }
 
+/* FIXED: Use theme variables for selection highlight */
 .settings-sidebar-header .close-btn.selected {
   outline: 2px solid var(--outline-selected);
   outline-offset: 2px;
-  background: var(--bg-active);
   color: var(--text-primary);
+  background: var(--bg-active);
 }
 
-/* Settings Categories List */
+/* Categories List */
 .settings-categories {
   flex: 1;
-  padding: 15px 0; /* REDUCED padding */
+  padding: 10px 0;
   overflow-y: auto;
 }
 
+/* FIXED: Style category items like main sidebar menu items */
 .category-item {
   display: flex;
   align-items: center;
-  padding: 12px 20px; /* REDUCED from 20px 25px */
-  margin: 2px 10px; /* REDUCED margins */
-  border-radius: var(--border-radius-small);
+  padding: 12px 25px; /* Reduced from 20px for more compact look */
   cursor: pointer;
   transition: all var(--transition-fast);
-  color: var(--text-secondary);
-  font-size: 16px;
+  color: var(--text-primary);
+  font-size: 16px; /* Reduced from 18px */
   font-weight: 500;
-  gap: 12px;
-  background: transparent;
-  border: 2px solid transparent;
+  user-select: none;
+  margin: 2px 15px; /* Reduced from 5px */
+  border-radius: var(--border-radius-small);
+  position: relative;
 }
 
-.category-item:hover {
+.category-item:hover:not(.disabled) {
   background: var(--bg-active);
-  color: var(--text-primary);
 }
 
-/* MATCH SIDEBAR ACTIVE STYLING - Use accent-blue for focus, accent-orange for selected */
-.category-item.focused {
-  border-color: var(--accent-blue);
-  background: rgba(0, 170, 255, 0.1);
-  color: var(--text-primary);
-  box-shadow: var(--glow-focused);
-}
-
+/* FIXED: Use theme variables for selection highlighting */
 .category-item.selected {
   background: var(--bg-active);
-  color: var(--text-primary);
-  border-color: var(--accent-orange);
-  box-shadow: var(--glow-selected);
+  outline: 2px solid var(--outline-focused); /* Use blue for focused, not selected */
+  outline-offset: 2px;
+}
+
+.category-item.active {
+  background: var(--accent-orange);
+  color: var(--bg-primary);
+}
+
+.category-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  color: var(--text-muted);
+}
+
+.category-label {
+  flex: 1;
+  font-size: 16px; /* Reduced from 18px */
   font-weight: 600;
-}
-
-.category-icon {
-  width: 20px;
-  height: 20px;
-  opacity: 0.8;
-  filter: var(--sidebar-icon-filter);
-  transition: opacity var(--transition-fast);
-}
-
-.category-item.selected .category-icon,
-.category-item.focused .category-icon {
-  opacity: 1;
 }
 
 /* Right Panel - Settings Content */
 .settings-main {
   flex: 1;
+  min-width: 0;
+  background: var(--bg-secondary); /* Different from sidebar for visual separation */
   position: relative;
-  background: var(--bg-primary);
   overflow: hidden;
 }
 
-.settings-panel {
-  padding: 20px 25px; /* REDUCED from 30px */
+/* Settings Panel Container */
+.settings-panel-container {
   height: 100%;
   width: 100%;
-  overflow-y: auto;
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Coming Soon Styling */
+.settings-coming-soon {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  display: block;
-}
-
-/* Panel Header */
-.panel-header {
-  margin-bottom: 20px; /* REDUCED from 30px */
-  border-bottom: 1px solid var(--text-muted);
-  padding-bottom: 15px; /* REDUCED from 20px */
-}
-
-.panel-header h2 {
-  margin: 0 0 8px 0; /* REDUCED */
-  font-size: 24px; /* REDUCED from 28px */
-  font-weight: 600;
-  color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-
-.panel-description {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 14px; /* REDUCED from 16px */
-  line-height: 1.4;
-}
-
-/* Panel Content - MUCH MORE COMPACT */
-.panel-content {
-  display: flex;
-  flex-direction: column;
-  gap: 20px; /* REDUCED from 40px */
-}
-
-/* Settings Sections - COMPACT */
-.settings-section {
+  justify-content: center;
+  padding: 40px;
   background: var(--bg-secondary);
+}
+
+.coming-soon-content {
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.coming-soon-content h2 {
+  margin: 0 0 15px 0;
+  color: var(--text-primary);
+  font-size: 24px;
+}
+
+.coming-soon-content p {
+  margin: 10px 0;
+  font-size: 16px;
+}
+
+.coming-soon-content .hint {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-top: 20px;
+}
+
+/* Panel Transitions */
+.settings-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(20px);
+  transition: all var(--transition-medium);
+}
+
+.settings-panel.active {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+}
+
+/* Loading State */
+.settings-container.loading {
+  pointer-events: none;
+}
+
+.settings-container.loading::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.settings-container.loading::before {
+  content: 'Loading Settings...';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text-primary);
+  font-size: 18px;
+  z-index: 11;
+  background: var(--bg-secondary);
+  padding: 20px 30px;
   border-radius: var(--border-radius-small);
-  padding: 15px 20px; /* REDUCED from 25px */
   border: 1px solid var(--text-muted);
 }
 
-.settings-section h3 {
-  margin: 0 0 12px 0; /* REDUCED from 20px */
-  font-size: 18px; /* REDUCED from 20px */
-  font-weight: 500;
-  color: var(--accent-orange);
-  border-bottom: 1px solid rgba(255, 170, 0, 0.3);
-  padding-bottom: 8px; /* REDUCED from 10px */
-}
-
-/* Settings Rows - MUCH MORE COMPACT */
-.settings-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px; /* REDUCED from 20px */
-  padding: 8px 0; /* REDUCED from 15px */
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.settings-row:last-child {
-  margin-bottom: 0;
-  border-bottom: none;
-}
-
-.settings-row.compact {
-  margin-bottom: 8px; /* Even more compact for dense sections */
-  padding: 6px 0;
-}
-
-.settings-label {
-  color: var(--text-primary);
-  font-size: 14px; /* REDUCED from 16px */
-  font-weight: 500;
-  flex: 1;
-  margin-right: 15px; /* REDUCED from 20px */
-}
-
-.settings-control {
-  flex: 0 0 250px; /* REDUCED from 300px */
-  display: flex;
-  flex-direction: column;
-  gap: 4px; /* REDUCED from 5px */
-}
-
-.setting-description {
-  color: var(--text-muted);
-  font-size: 12px; /* REDUCED from 14px */
-  line-height: 1.3;
-}
-
-/* Footer with Save/Cancel */
+/* FIXED: Footer with proper save/cancel buttons */
 .settings-footer {
-  background: var(--bg-secondary);
-  border-top: 1px solid var(--text-muted);
-  padding: 15px 20px; /* REDUCED from 20px 30px */
+  background: var(--bg-primary); /* Match sidebar background */
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 15px 30px; /* Reduced from 20px for more compact look */
   display: flex;
   justify-content: flex-end;
-  gap: 12px; /* REDUCED from 15px */
+  gap: 15px;
   flex-shrink: 0;
 }
 
@@ -282,17 +267,18 @@
   display: none;
 }
 
+/* FIXED: Use theme variables for button styling */
 .settings-btn {
   background: var(--bg-button);
   color: var(--text-primary);
   border: 2px solid transparent;
   border-radius: var(--border-radius-small);
-  padding: 10px 20px; /* REDUCED from 12px 24px */
+  padding: 10px 20px; /* Slightly reduced for compactness */
   cursor: pointer;
-  font-size: 14px; /* REDUCED from 16px */
+  font-size: 14px; /* Reduced from 16px */
   font-weight: 500;
   transition: all var(--transition-fast);
-  min-width: 80px; /* REDUCED from 100px */
+  min-width: 80px; /* Reduced from 100px */
   position: relative;
 }
 
@@ -304,12 +290,19 @@
 .settings-btn:hover:not(.selected) {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  background: var(--bg-active);
 }
 
+/* FIXED: Proper focus styling for buttons */
 .settings-btn.selected {
-  border-color: var(--outline-selected);
-  box-shadow: var(--glow-selected);
+  border-color: var(--outline-focused);
+  box-shadow: 0 0 0 2px rgba(0, 170, 255, 0.3);
   transform: translateY(-1px);
+}
+
+.settings-btn.primary.selected {
+  border-color: var(--outline-focused);
+  box-shadow: 0 0 0 2px rgba(0, 170, 255, 0.5);
 }
 
 /* Responsive Design */
@@ -320,15 +313,17 @@
   }
   
   .settings-sidebar {
-    width: 280px; /* Slightly smaller on smaller screens */
+    width: 300px;
+    min-width: 300px;
   }
   
   .category-item {
-    padding: 10px 15px;
+    padding: 10px 20px; /* Further reduced for smaller screens */
     font-size: 14px;
   }
 }
 
+/* Only switch to column layout on very small screens */
 @media (max-width: 600px) {
   .settings-container {
     flex-direction: column;
@@ -338,30 +333,87 @@
   
   .settings-sidebar {
     width: 100%;
-    height: 150px; /* REDUCED from 200px */
+    min-width: unset;
+    height: 150px; /* Reduced from 200px */
     border-right: none;
-    border-bottom: 1px solid var(--text-muted);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
   
   .settings-categories {
     display: flex;
-    gap: 8px; /* REDUCED from 10px */
-    padding: 8px 15px; /* REDUCED from 10px 20px */
+    gap: 8px; /* Reduced gap */
+    padding: 8px 15px; /* Reduced padding */
     overflow-x: auto;
     overflow-y: hidden;
   }
   
   .category-item {
     flex-shrink: 0;
-    min-width: 100px; /* REDUCED from 120px */
+    min-width: 100px; /* Reduced from 120px */
     text-align: center;
     flex-direction: column;
-    gap: 4px; /* REDUCED from 5px */
-    padding: 10px 8px; /* REDUCED from 15px 10px */
+    gap: 3px; /* Reduced gap */
+    padding: 10px 8px; /* Reduced padding */
+    font-size: 12px; /* Smaller font */
   }
   
   .settings-main {
     flex: 1;
     min-height: 0;
   }
+  
+  .settings-overlay {
+    padding: 5px; /* Reduced padding */
+  }
+  
+  .settings-container {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+  
+  .settings-sidebar-header {
+    padding: 15px; /* Reduced padding */
+  }
+  
+  .settings-sidebar-header h1 {
+    font-size: 18px; /* Reduced font size */
+  }
+  
+  .settings-footer {
+    padding: 10px 15px; /* Reduced padding */
+  }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .settings-overlay,
+  .settings-panel,
+  .category-item,
+  .settings-btn {
+    transition: none;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .settings-container {
+    border: 2px solid var(--text-primary);
+  }
+  
+  .category-item {
+    border: 1px solid transparent;
+  }
+  
+  .category-item.selected {
+    border-color: var(--outline-focused);
+  }
+}
+
+/* Focus visible for keyboard navigation */
+.category-item:focus-visible,
+.settings-btn:focus-visible,
+.close-btn:focus-visible {
+  outline: 2px solid var(--outline-focused);
+  outline-offset: 2px;
 }
