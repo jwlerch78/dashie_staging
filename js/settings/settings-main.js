@@ -63,7 +63,7 @@ export async function showSettings(initialCategory = 'display') {
   console.log('⚙️ 🎨 Opening settings modal...');
   
   // Store original settings for cancel functionality
-  originalSettings = JSON.parse(JSON.stringify(settingsController.getAllSettings()));
+  originalSettings = JSON.parse(JSON.stringify(settingsController.getSettings()));
   
   currentCategory = initialCategory;
   currentFocus = { type: 'category', index: categories.findIndex(c => c.id === initialCategory) };
@@ -350,7 +350,7 @@ function createPanel(categoryId) {
 }
 
 function getPanelContent(categoryId) {
-  const settings = settingsController.getAllSettings();
+  const settings = settingsController.getSettings();
   
   switch (categoryId) {
     case 'display':
@@ -589,7 +589,7 @@ function handleSave() {
     
     // Dispatch settings update event
     window.dispatchEvent(new CustomEvent('settingsUpdated', {
-      detail: { settings: settingsController.getAllSettings() }
+      detail: { settings: settingsController.getSettings() }
     }));
     
     console.log('⚙️ ✅ Settings saved successfully');
