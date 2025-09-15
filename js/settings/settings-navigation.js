@@ -111,32 +111,54 @@ export class SettingsNavigation {
   }
 
   // Set up event listeners
-  setupEventListeners() {
-    if (!this.element) return;
+ setupEventListeners() {
+  if (!this.element) return;
 
-    // Category clicks
-    const categoryItems = this.element.querySelectorAll('.category-item');
-    categoryItems.forEach(item => {
-      item.addEventListener('click', this.handleCategoryClick);
-    });
+  // CRITICAL: Add event listeners with capture and stop propagation
+  const categoryItems = this.element.querySelectorAll('.category-item');
+  categoryItems.forEach(item => {
+    // Remove old listeners first
+    item.removeEventListener('click', this.handleCategoryClick);
+    
+    // Add new listeners with proper event handling
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      this.handleCategoryClick(e);
+    }, true); // Use capture phase
+  });
 
-    // Close button
-    const closeBtn = this.element.querySelector('.close-btn');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', this.handleCloseClick);
-    }
-
-    // Keyboard navigation
-    document.addEventListener('keydown', this.handleKeyPress);
-
-    // Click outside to close
-    this.element.addEventListener('click', (e) => {
-      if (e.target === this.element) {
-        this.hide();
-      }
-    });
+  // Close button
+  const closeBtn = this.element.querySelector('.close-btn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      this.handleCloseClick(e);
+    }, true);
   }
 
+  // Keyboard navigation - also stop propagation
+  document.addEventListener('keydown', (e) => {
+    if (this.isVisible) {
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      this.handleKeyPress(e);
+    }
+  }, true);
+
+  // Click outside to close - but don't let it bubble
+  this.element.addEventListener('click', (e) => {
+    if (e.target === this.element) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      this.hide();
+    }
+  }, true);
+}
   // Load panel instances
   async loadPanels() {
     try {
@@ -246,17 +268,25 @@ export class SettingsNavigation {
     }
   }
 
-  // Handle category click
-  handleCategoryClick(event) {
-    const categoryId = event.currentTarget.dataset.category;
-    const categoryIndex = parseInt(event.currentTarget.dataset.index);
-    const category = this.categories[categoryIndex];
-    
-    if (category && category.enabled) {
-      this.currentCategoryIndex = categoryIndex;
-      this.selectCategory(categoryId);
-    }
+handleCategoryClick(event) {
+  // CRITICAL: Stop event from bubbling to main app
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+  
+  const categoryId = event.currentTarget.dataset.category;
+  const categoryIndex = parseInt(event.currentTarget.dataset.index);
+  const category = this.categories[categoryIndex];
+  
+  console.log('⚙️ Settings category clicked:', categoryId); // Add debug logging
+  
+  if (category && category.enabled) {
+    this.currentCategoryIndex = categoryIndex;
+    this.selectCategory(categoryId);
+  } else {
+    console.log('⚙️ Category disabled or not found:', categoryId);
   }
+}
 
   // Handle close button click
   handleCloseClick() {
