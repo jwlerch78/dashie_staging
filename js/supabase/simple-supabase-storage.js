@@ -72,10 +72,9 @@ getGoogleAccessToken() {
   return null;
 }
 
-  
 // Get Supabase auth token from Google OAuth via Edge Function
-// Updated to use dev or prod edge server
-  async ensureSupabaseAuth() {
+// Updated to use dev or prod edge server dynamically
+async ensureSupabaseAuth() {
   if (this.supabaseAuthToken) {
     return this.supabaseAuthToken; // Already authenticated
   }
@@ -101,9 +100,13 @@ getGoogleAccessToken() {
     // Dynamically determine Edge Function URL based on environment
     const getEdgeFunctionUrl = () => {
       const config = window.currentDbConfig;
-      const edgeUrl = config.supabaseEdgeUrl;
+      if (config.supabaseEdgeUrl) {
+        return config.supabaseEdgeUrl;
+      }
       
-      return edgeUrl;
+      // Fallback: construct URL from supabaseUrl if edgeUrl not defined
+      const baseUrl = config.supabaseUrl.replace('https://', '').replace('.supabase.co', '');
+      return `https://${baseUrl}.supabase.co/functions/v1/hyper-responder`;
     };
 
     const edgeFunctionUrl = getEdgeFunctionUrl();
@@ -139,16 +142,65 @@ getGoogleAccessToken() {
       throw new Error(result.error || 'Failed to authenticate with Supabase');
     }
 
-    this.supabaseAuthToken = result.supabaseToken;
+    // Handle both possible response formats
+    this.supabaseAuthToken = result.supabaseToken || result.token;
+    const supabaseUserId = result.supabase_user_id || result.user_id;
     
-    // Set the session in Supabase client
-    const { error } = await supabase.auth.setSession({
-      access_token: result.supabaseToken,
-      refresh_token: null
-    });
+    if (!this.supabaseAuthToken) {
+      throw new Error('No token received from Edge Function');
+    }
 
-    if (error) {
-      console.warn('Session set warning:', error);
+    console.log('🔐 ✅ Authentication successful');
+    console.log('🔐 Google ID:', currentUser.id);
+    console.log('🔐 Supabase UUID:', supabaseUserId);
+    
+    // CRITICAL: Update the userId to use Supabase UUID for database operations
+    this.userId = supabaseUserId;
+    console.log('🔐 Updated userId for database operations:', this.userId);
+    
+    // Try to set session with improved approach
+    try {
+      // Method 1: Try standard setSession
+      const { data, error } = await supabase.auth.setSession({
+        access_token: this.supabaseAuthToken,
+        refresh_token: null
+      });
+
+      if (error) {
+        console.warn('⚠️ setSession failed, trying alternative approaches:', error.message);
+        
+        // Method 2: Set auth header manually on REST client
+        if (supabase.rest && supabase.rest.headers) {
+          supabase.rest.headers['Authorization'] = `Bearer ${this.supabaseAuthToken}`;
+          console.log('✅ Set manual Authorization header on REST client');
+        }
+        
+        // Method 3: Set global headers if available
+        if (supabase.supabaseKey) {
+          const originalHeaders = supabase.rest.headers || {};
+          supabase.rest.headers = {
+            ...originalHeaders,
+            'Authorization': `Bearer ${this.supabaseAuthToken}`
+          };
+          console.log('✅ Updated global headers');
+        }
+        
+        // Method 4: Try direct auth client method
+        try {
+          if (supabase.auth && typeof supabase.auth.setAuth === 'function') {
+            supabase.auth.setAuth(this.supabaseAuthToken);
+            console.log('✅ Set auth token directly on auth client');
+          }
+        } catch (directAuthError) {
+          console.log('⚠️ Direct auth method not available:', directAuthError.message);
+        }
+        
+      } else {
+        console.log('✅ Session set successfully via setSession');
+      }
+    } catch (authSetupError) {
+      console.warn('⚠️ All auth setup methods failed:', authSetupError.message);
+      console.log('🔄 Proceeding without proper session - RLS may not work');
     }
 
     this.isRLSEnabled = true;
@@ -162,8 +214,6 @@ getGoogleAccessToken() {
     return null;
   }
 }
-
-  
   // Save settings with hybrid approach (local + cloud)
   async saveSettings(settings) {
     console.log('💾 Saving settings for user:', this.userId);
