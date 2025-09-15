@@ -14,12 +14,20 @@ export class GoogleAPIClient {
   // Generic API request method with error handling
   async makeRequest(endpoint, options = {}) {
     const token = this.getAccessToken();
-    if (!token) {
-      throw new Error('No Google access token available');
-    }
+  if (!token) {
+    throw new Error('No Google access token available');
+  }
 
-    const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
-    
+  let url;
+  if (endpoint.startsWith('http')) {
+    url = endpoint;
+  } else if (endpoint.startsWith('/v1/')) {
+    // Photos API endpoints use photoslibrary domain
+    url = `https://photoslibrary.googleapis.com${endpoint}`;
+  } else {
+    // Other APIs use standard domain
+    url = `${this.baseUrl}${endpoint}`;
+  }    
     const requestOptions = {
       method: 'GET',
       headers: {

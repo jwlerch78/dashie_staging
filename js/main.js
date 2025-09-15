@@ -1,15 +1,15 @@
 // js/main.js - App Initialization & Orchestration with Centralized Settings
-
 import { initializeEvents } from './core/events.js';
 import { updateFocus, initializeHighlightTimeout } from './core/navigation.js';
 import { renderGrid, renderSidebar } from './ui/grid.js';
 import { initializeSettings } from './settings/settings-main.js';
 import { initializeThemeSystem } from './core/theme.js';
+import { AuthManager } from './auth/auth-manager.js';
+import { SimpleAuth } from './auth/simple-auth.js';
 
 // ---------------------
 // EARLY THEME APPLICATION
 // ---------------------
-
 // Import and apply theme as early as possible to prevent flash
 async function preApplyTheme() {
   try {
@@ -21,12 +21,24 @@ async function preApplyTheme() {
 }
 
 // ---------------------
+// AUTH INITIALIZATION
+// ---------------------
+// Initialize auth system early so it's available globally
+console.log('🔐 Initializing authentication system...');
+const authManager = new AuthManager();
+const simpleAuth = new SimpleAuth(authManager);
+
+// Expose globally for console access and widgets
+window.authManager = authManager;
+window.dashieAuth = simpleAuth;
+
+console.log('🔐 Auth system exposed globally');
+
+// ---------------------
 // APP INITIALIZATION
 // ---------------------
-
 async function initializeApp() {
   console.log("Initializing Dashie Dashboard...");
-
   await initializeSettings();  // Add 'await' since it's async
   
   // Initialize theme system first (before any UI rendering)
@@ -36,7 +48,7 @@ async function initializeApp() {
   // Set up event listeners
   initializeEvents();
   
-    // Initialize navigation highlight timeout system
+  // Initialize navigation highlight timeout system
   initializeHighlightTimeout();
   
   // Render initial UI

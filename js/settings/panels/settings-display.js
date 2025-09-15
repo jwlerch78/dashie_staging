@@ -1,5 +1,5 @@
-// js/settings/panels/settings-display.js
-// Complete Display Settings Panel
+// js/ui/settings/panels/settings-display.js
+// Display panel with theme, sleep settings, and photos transition time
 
 export class DisplaySettingsPanel {
   constructor(settingsController) {
@@ -278,41 +278,31 @@ export class DisplaySettingsPanel {
   }
 
   // Apply theme change immediately
-  async applyTheme(theme) {
+  applyTheme(theme) {
     console.log(`🎨 Applying theme: ${theme}`);
     
-    try {
-      // Try to use the main theme system first
-      const { switchTheme } = await import('../../core/theme.js');
-      switchTheme(theme);
-      console.log('🎨 ✅ Applied theme via theme manager');
-      return;
-    } catch (error) {
-      console.warn('🎨 Theme manager not available, using fallback');
-    }
-    
-    // Fallback: Update CSS custom properties directly
+    // Update CSS custom properties for theme
     const root = document.documentElement;
     
     if (theme === 'light') {
-      root.style.setProperty('--bg-primary', '#FCFCFF');
-      root.style.setProperty('--bg-secondary', '#FCFCFF');
-      root.style.setProperty('--text-primary', '#424242');
-      root.style.setProperty('--text-secondary', '#616161');
-      root.style.setProperty('--text-muted', '#9e9e9e');
-      root.style.setProperty('--grid-gap-color', '#9eb4fe');
+      root.style.setProperty('--bg-primary', '#f5f5f5');
+      root.style.setProperty('--bg-secondary', '#ffffff');
+      root.style.setProperty('--text-primary', '#333333');
+      root.style.setProperty('--text-secondary', '#666666');
+      root.style.setProperty('--text-muted', '#999999');
     } else {
       // Dark theme (default)
-      root.style.setProperty('--bg-primary', '#222');
-      root.style.setProperty('--bg-secondary', '#333');
-      root.style.setProperty('--text-primary', '#fff');
-      root.style.setProperty('--text-secondary', '#ccc');
-      root.style.setProperty('--text-muted', '#999');
-      root.style.setProperty('--grid-gap-color', '#333');
+      root.style.setProperty('--bg-primary', '#222222');
+      root.style.setProperty('--bg-secondary', '#333333'); 
+      root.style.setProperty('--text-primary', '#ffffff');
+      root.style.setProperty('--text-secondary', '#cccccc');
+      root.style.setProperty('--text-muted', '#999999');
     }
     
-    // Set data attribute for CSS targeting
-    document.documentElement.setAttribute('data-theme', theme);
+    // Save theme preference to existing theme manager if available
+    if (window.themeManager) {
+      window.themeManager.setTheme(theme);
+    }
   }
 
   // Refresh panel from updated settings
@@ -347,11 +337,19 @@ export class DisplaySettingsPanel {
   show() {
     if (this.element) {
       this.element.style.display = 'block';
+      this.element.style.position = 'relative';
+      this.element.style.width = '100%';
+      this.element.style.height = '100%';
+      this.element.style.opacity = '1';
+      this.element.style.visibility = 'visible';
+      this.element.style.transform = 'translateX(0)';
       this.updateFocusableElements();
       
       // Focus first element
       this.currentFocus = 0;
       this.updateFocus();
+      
+      console.log('🎨 Display panel shown');
     }
   }
 
@@ -359,6 +357,7 @@ export class DisplaySettingsPanel {
   hide() {
     if (this.element) {
       this.element.style.display = 'none';
+      console.log('🎨 Display panel hidden');
     }
   }
 

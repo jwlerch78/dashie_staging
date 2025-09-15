@@ -146,13 +146,27 @@
   overflow: hidden;
 }
 
+/* Settings Panel Container */
+.settings-panel-container {
+  height: 100%;
+  width: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
 /* Coming Soon Styling */
 .settings-coming-soon {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100%;
   padding: 40px;
+  background: var(--bg-primary);
 }
 
 .coming-soon-content {
@@ -175,12 +189,6 @@
   font-size: 14px;
   color: var(--text-muted);
   margin-top: 20px;
-}
-
-/* Settings Panel Container */
-.settings-panel-container {
-  height: 100%;
-  position: relative;
 }
 
 /* Panel Transitions */

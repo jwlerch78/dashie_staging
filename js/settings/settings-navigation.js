@@ -1,4 +1,4 @@
-// js/settings/settings-navigation.js
+// js/ui/settings/settings-navigation.js
 // Navigation controller for two-panel settings interface
 
 export class SettingsNavigation {
@@ -81,7 +81,7 @@ export class SettingsNavigation {
         <!-- Right Panel - Settings Content -->
         <div class="settings-main">
           <div class="settings-panel-container">
-            <!-- Welcome message or panels will go here -->
+            <!-- Welcome message removed -->
           </div>
         </div>
       </div>
@@ -180,7 +180,7 @@ export class SettingsNavigation {
     if (handled) {
       event.preventDefault();
       event.stopPropagation();
-      event.stopImmediatePropagation();
+      event.stopImmediatePropagation(); // Prevent event from reaching dashboard
     }
 
     return handled;
@@ -320,7 +320,11 @@ export class SettingsNavigation {
     const categoryItems = this.element.querySelectorAll('.category-item');
     categoryItems.forEach(item => {
       const categoryId = item.dataset.category;
-      item.classList.toggle('active', categoryId === selectedId);
+      // Only mark as active if we're actually viewing that panel's content
+      // For "coming soon" panels, don't mark as active
+      const panel = this.panels.get(categoryId);
+      const hasRealPanel = panel && typeof panel.show === 'function';
+      item.classList.toggle('active', categoryId === selectedId && hasRealPanel);
     });
   }
 

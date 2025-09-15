@@ -8,10 +8,6 @@ export class SimpleAuth {
     this.authManager = new AuthManager();
   }
 
-  getGoogleAPI() {
-  return this.authManager.getGoogleAPI();
-}
-
   // Delegate to AuthManager
   getUser() {
     return this.authManager.getUser();
