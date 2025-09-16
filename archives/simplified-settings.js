@@ -1,5 +1,5 @@
 // js/settings/simplified-settings.js
-// Complete simplified settings system with enhanced event handling and fixed initialization
+// Complete fixed simplified settings system with better auth timing
 
 export class SimplifiedSettings {
   constructor() {
@@ -10,35 +10,28 @@ export class SimplifiedSettings {
     this.pendingChanges = {};
     this.keydownHandler = null;
     this.initializationAttempts = 0;
-    this.maxInitAttempts = 10;
+    this.maxInitAttempts = 20; // Increased attempts
     
-    // Start initialization process
-    this.initializeController();
+    // Start initialization process with delay
+    setTimeout(() => this.initializeController(), 500); // Give auth time to settle
   }
 
   async initializeController() {
     try {
       this.initializationAttempts++;
-      console.log(`Settings initialization attempt ${this.initializationAttempts}/${this.maxInitAttempts}`);
+      console.log(`⚙️ Settings initialization attempt ${this.initializationAttempts}/${this.maxInitAttempts}`);
       
-      // Check if auth is ready
-      const isAuthenticated = window.dashieAuth?.isAuthenticated();
-      const hasUser = window.dashieAuth?.getUser();
+      // IMPROVED: Better auth detection
+      const authStatus = this.checkAuthStatus();
+      console.log('⚙️ Auth status check:', authStatus);
       
-      console.log('Auth check:', {
-        dashieAuthExists: !!window.dashieAuth,
-        isAuthenticated: isAuthenticated,
-        hasUser: !!hasUser,
-        userEmail: hasUser?.email
-      });
-      
-      if (!isAuthenticated || !hasUser) {
+      if (!authStatus.ready) {
         if (this.initializationAttempts < this.maxInitAttempts) {
-          console.log('Auth not ready, retrying in 1 second...');
-          setTimeout(() => this.initializeController(), 1000);
+          console.log('⚙️ Auth not ready, retrying in 500ms...');
+          setTimeout(() => this.initializeController(), 500); // Increased delay
           return;
         } else {
-          console.warn('Max initialization attempts reached, proceeding without auth');
+          console.warn('⚙️ Max initialization attempts reached, proceeding without full auth');
           // Proceed anyway - will use local storage only
         }
       }
@@ -47,27 +40,66 @@ export class SimplifiedSettings {
       const { SettingsController } = await import('./settings-controller.js');
       this.controller = new SettingsController();
       
-      if (isAuthenticated && hasUser) {
-        await this.controller.init();
-        console.log('Settings controller initialized with database support');
+      const initSuccess = await this.controller.init();
+      
+      if (initSuccess) {
+        console.log('⚙️ ✅ Settings controller initialized successfully');
       } else {
-        console.log('Settings controller initialized with local storage only');
+        console.warn('⚙️ ⚠️ Settings controller initialized with fallback mode');
       }
       
     } catch (error) {
-      console.error('Settings controller initialization failed:', error);
+      console.error('⚙️ ❌ Settings controller initialization failed:', error);
       
       // Create a fallback controller that only uses localStorage
       this.controller = this.createFallbackController();
-      console.log('Using fallback localStorage-only controller');
+      console.log('⚙️ Using fallback localStorage-only controller');
     }
+  }
+
+  // IMPROVED: Better auth status checking
+  checkAuthStatus() {
+    // Check if dashieAuth exists and is functional
+    const hasDashieAuth = window.dashieAuth && typeof window.dashieAuth.isAuthenticated === 'function';
+    const isAuthenticated = hasDashieAuth ? window.dashieAuth.isAuthenticated() : false;
+    const hasUser = hasDashieAuth ? !!window.dashieAuth.getUser() : false;
+    
+    // Check if authManager exists as fallback
+    const hasAuthManager = window.authManager && window.authManager.currentUser;
+    
+    // Check for saved user in localStorage as final fallback
+    let hasSavedUser = false;
+    try {
+      const savedUser = localStorage.getItem('dashie-user');
+      hasSavedUser = !!savedUser;
+    } catch (e) {
+      // Ignore localStorage errors
+    }
+    
+    const ready = (hasDashieAuth && isAuthenticated && hasUser) || 
+                  hasAuthManager || 
+                  hasSavedUser;
+    
+    return {
+      ready,
+      hasDashieAuth,
+      isAuthenticated,
+      hasUser,
+      hasAuthManager,
+      hasSavedUser,
+      userEmail: hasUser ? window.dashieAuth.getUser().email : 
+                hasAuthManager ? window.authManager.currentUser.email : 
+                'unknown'
+    };
   }
 
   // Fallback controller for when database initialization fails
   createFallbackController() {
+    const userEmail = this.checkAuthStatus().userEmail;
+    
     return {
       isInitialized: true,
-      currentSettings: this.getDefaultSettings(),
+      currentSettings: this.getDefaultSettings(userEmail),
       
       getSetting(path) {
         const keys = path.split('.');
@@ -93,16 +125,32 @@ export class SimplifiedSettings {
           current = current[key];
         }
         current[keys[keys.length - 1]] = value;
+        
+        // Apply theme immediately if it's a theme setting
+        if (path === 'display.theme') {
+          this.applyThemeImmediate(value);
+        }
+        
         return true;
+      },
+      
+      async applyThemeImmediate(theme) {
+        try {
+          const { switchTheme } = await import('../core/theme.js');
+          switchTheme(theme);
+          console.log(`⚙️ 🎨 Fallback: Theme applied: ${theme}`);
+        } catch (error) {
+          console.warn('⚙️ ⚠️ Fallback: Failed to apply theme:', error);
+        }
       },
       
       async saveSettings() {
         try {
           localStorage.setItem('dashie-settings', JSON.stringify(this.currentSettings));
-          console.log('Saved to localStorage (fallback mode)');
+          console.log('⚙️ 💾 Fallback: Saved to localStorage');
           return true;
         } catch (error) {
-          console.error('Failed to save to localStorage:', error);
+          console.error('⚙️ ❌ Fallback: Failed to save to localStorage:', error);
           return false;
         }
       },
@@ -117,8 +165,7 @@ export class SimplifiedSettings {
     };
   }
 
-  getDefaultSettings() {
-    const user = window.dashieAuth?.getUser();
+  getDefaultSettings(userEmail = 'unknown@example.com') {
     return {
       photos: { transitionTime: 5 },
       display: {
@@ -128,7 +175,7 @@ export class SimplifiedSettings {
         theme: 'dark'
       },
       accounts: {
-        dashieAccount: user?.email || 'unknown@example.com',
+        dashieAccount: userEmail,
         connectedServices: [],
         pinEnabled: false
       },
@@ -154,7 +201,7 @@ export class SimplifiedSettings {
     
     // Ensure controller is initialized before showing
     if (!this.controller) {
-      console.log('Controller not ready, attempting initialization...');
+      console.log('⚙️ Controller not ready, attempting initialization...');
       await this.initializeController();
       
       // If still no controller, show error
@@ -169,7 +216,7 @@ export class SimplifiedSettings {
     this.setupEventHandlers();
     this.showOverlay();
     
-    console.log('Simplified settings shown');
+    console.log('⚙️ 👁️ Simplified settings shown');
   }
 
   hide() {
@@ -178,7 +225,7 @@ export class SimplifiedSettings {
     this.hideOverlay();
     this.cleanup();
     
-    console.log('Simplified settings hidden');
+    console.log('⚙️ 👁️ Simplified settings hidden');
   }
 
   createSettingsUI() {
@@ -347,7 +394,7 @@ export class SimplifiedSettings {
     try {
       // Load all current settings
       const currentSettings = this.controller.getSettings();
-      console.log('Loading current settings:', currentSettings);
+      console.log('⚙️ Loading current settings:', currentSettings);
       
       // Populate form fields with current values
       this.populateFormFields(currentSettings);
@@ -356,7 +403,7 @@ export class SimplifiedSettings {
       this.applyTheme(currentSettings.display?.theme || 'dark');
       
     } catch (error) {
-      console.error('Failed to load current settings:', error);
+      console.error('⚙️ ❌ Failed to load current settings:', error);
     }
   }
 
@@ -389,7 +436,7 @@ export class SimplifiedSettings {
       photoTransition.value = settings.photos.transitionTime;
     }
 
-    console.log('Form fields populated with current settings');
+    console.log('⚙️ Form fields populated with current settings');
   }
 
   setupEventHandlers() {
@@ -408,7 +455,7 @@ export class SimplifiedSettings {
         return;
       }
 
-      console.log('Settings captured key:', event.key);
+      console.log('⚙️ Settings captured key:', event.key);
       
       // Let the navigation handle it
       if (this.navigation.handleKeyPress(event)) {
@@ -427,7 +474,7 @@ export class SimplifiedSettings {
         const path = e.target.dataset.setting;
         const value = e.target.type === 'number' ? parseInt(e.target.value) : e.target.value;
         this.pendingChanges[path] = value;
-        console.log(`Setting queued: ${path} = ${value}`);
+        console.log(`⚙️ Setting queued: ${path} = ${value}`);
       });
     });
 
@@ -445,17 +492,17 @@ export class SimplifiedSettings {
     // Track the change
     this.pendingChanges['display.theme'] = theme;
     
-    console.log(`Theme previewed: ${theme}`);
+    console.log(`⚙️ Theme previewed: ${theme}`);
   }
 
   handleSettingChange(path, value) {
     this.pendingChanges[path] = value;
-    console.log(`Setting changed: ${path} = ${value}`);
+    console.log(`⚙️ Setting changed: ${path} = ${value}`);
   }
 
   async handleSave() {
     if (!this.controller) {
-      console.error('No settings controller available');
+      console.error('⚙️ ❌ No settings controller available');
       
       // Try to initialize one more time
       await this.initializeController();
@@ -467,13 +514,13 @@ export class SimplifiedSettings {
     }
 
     try {
-      console.log('Saving settings:', this.pendingChanges);
+      console.log('⚙️ 💾 Saving settings:', this.pendingChanges);
       
       // Apply all pending changes to the controller
       for (const [path, value] of Object.entries(this.pendingChanges)) {
         const success = this.controller.setSetting(path, value);
         if (!success) {
-          console.warn(`Failed to set ${path} = ${value}`);
+          console.warn(`⚙️ ⚠️ Failed to set ${path} = ${value}`);
         }
       }
       
@@ -492,18 +539,11 @@ export class SimplifiedSettings {
       // Notify other parts of the app
       this.notifySettingsChanged();
       
-      console.log('Settings saved successfully');
+      console.log('⚙️ ✅ Settings saved successfully');
       this.hide();
       
     } catch (error) {
-      console.error('Failed to save settings:', error);
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        pendingChanges: this.pendingChanges,
-        controllerExists: !!this.controller,
-        controllerInitialized: this.controller?.isInitialized
-      });
+      console.error('⚙️ ❌ Failed to save settings:', error);
       alert('Failed to save settings. Please try again.');
     }
   }
@@ -515,13 +555,13 @@ export class SimplifiedSettings {
       this.applyTheme(originalTheme);
     }
     
-    console.log('Settings cancelled');
+    console.log('⚙️ Settings cancelled');
     this.hide();
   }
 
   applyTheme(theme) {
     // Apply theme to settings modal
-    document.body.className = `theme-${theme}`;
+    document.body.className = document.body.className.replace(/theme-\w+/g, '') + ` theme-${theme}`;
     
     // Also apply to the overlay specifically
     this.overlay.classList.remove('theme-dark', 'theme-light');
@@ -533,9 +573,9 @@ export class SimplifiedSettings {
       // Use existing theme system
       const { switchTheme } = await import('../core/theme.js');
       switchTheme(theme);
-      console.log(`Applied theme to main dashboard: ${theme}`);
+      console.log(`⚙️ 🎨 Applied theme to main dashboard: ${theme}`);
     } catch (error) {
-      console.warn('Could not apply theme to main dashboard:', error);
+      console.warn('⚙️ ⚠️ Could not apply theme to main dashboard:', error);
     }
   }
 
@@ -560,7 +600,7 @@ export class SimplifiedSettings {
               photoTransitionTime: this.pendingChanges['photos.transitionTime']
             }, '*');
           } catch (error) {
-            console.warn('Failed to update photo widget:', error);
+            console.warn('⚙️ ⚠️ Failed to update photo widget:', error);
           }
         }
       });
@@ -598,7 +638,7 @@ export class SimplifiedSettings {
   }
 }
 
-// Simplified Navigation Class
+// Simplified Navigation Class with Fixed D-pad Navigation
 class SimplifiedNavigation {
   constructor(overlay, callbacks) {
     this.overlay = overlay;
@@ -607,6 +647,7 @@ class SimplifiedNavigation {
     this.focusableElements = [];
     this.collapsedGroups = new Set(['theme', 'sleep', 'photos', 'widget-config']);
     this.currentTab = 'display';
+    this.navigationZone = 'content'; // 'tabs' or 'content'
     
     this.init();
   }
@@ -618,11 +659,12 @@ class SimplifiedNavigation {
   }
 
   updateFocusableElements() {
-    // SEPARATE navigation zones - don't mix tabs with content
+    // Get all focusable elements including tabs
     const tabs = Array.from(this.overlay.querySelectorAll('.tab-button:not(.disabled)'));
     const activePanel = this.overlay.querySelector('.tab-panel.active');
     const groupTitles = Array.from(activePanel.querySelectorAll('.group-title'));
     
+    // Get expanded form controls
     const expandedControls = [];
     groupTitles.forEach(title => {
       const groupId = title.dataset.group;
@@ -636,9 +678,15 @@ class SimplifiedNavigation {
     
     const buttons = Array.from(this.overlay.querySelectorAll('.settings-footer .btn'));
     
-    // Only include content elements, not tabs (tabs are handled separately)
-    this.focusableElements = [...groupTitles, ...expandedControls, ...buttons];
-    console.log(`Updated focusable elements: ${this.focusableElements.length} (${groupTitles.length} titles, ${expandedControls.length} controls, ${buttons.length} buttons)`);
+    // Create complete navigation hierarchy: tabs -> groups -> controls -> buttons
+    this.focusableElements = [...tabs, ...groupTitles, ...expandedControls, ...buttons];
+    
+    console.log(`⚙️ Updated focusable elements: ${this.focusableElements.length} (${tabs.length} tabs, ${groupTitles.length} titles, ${expandedControls.length} controls, ${buttons.length} buttons)`);
+    
+    // Adjust focus index if it's out of bounds
+    if (this.focusIndex >= this.focusableElements.length) {
+      this.focusIndex = Math.max(0, this.focusableElements.length - 1);
+    }
   }
 
   setupEventListeners() {
@@ -646,7 +694,6 @@ class SimplifiedNavigation {
     this.overlay.querySelectorAll('.tab-button:not(.disabled)').forEach(tab => {
       tab.addEventListener('click', (e) => {
         e.stopPropagation();
-        console.log('Tab clicked:', tab.dataset.tab);
         this.switchTab(tab.dataset.tab);
       });
     });
@@ -655,7 +702,6 @@ class SimplifiedNavigation {
     this.overlay.querySelectorAll('.group-title').forEach(title => {
       title.addEventListener('click', (e) => {
         e.stopPropagation();
-        console.log('Group title clicked:', title.dataset.group);
         this.toggleGroup(title.dataset.group);
       });
     });
@@ -663,7 +709,6 @@ class SimplifiedNavigation {
     // Form changes
     this.overlay.querySelectorAll('.form-control').forEach(control => {
       control.addEventListener('change', (e) => {
-        console.log('Form control changed:', control.id, control.value);
         if (control.id === 'theme-select') {
           this.callbacks.onThemeChange(e.target.value);
         } else if (control.dataset.setting) {
@@ -673,7 +718,7 @@ class SimplifiedNavigation {
       });
     });
 
-    // Button clicks - FIXED
+    // Button clicks
     const saveBtn = this.overlay.querySelector('#save-btn');
     const cancelBtn = this.overlay.querySelector('#cancel-btn');
     
@@ -681,7 +726,6 @@ class SimplifiedNavigation {
       saveBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
-        console.log('Save button clicked');
         this.callbacks.onSave();
       });
     }
@@ -690,118 +734,51 @@ class SimplifiedNavigation {
       cancelBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
-        console.log('Cancel button clicked');
         this.callbacks.onCancel();
       });
     }
-
-    // NOTE: Keyboard navigation is now handled by the parent SimplifiedSettings class
   }
 
   handleKeyPress(event) {
     const { key } = event;
     let handled = false;
 
-    console.log(`Settings navigation handling key: ${key}`);
+    console.log(`⚙️ Navigation handling key: ${key}, current focus: ${this.focusIndex}/${this.focusableElements.length}`);
 
-    // Check if we're on tabs (special handling)
-    if (this.isOnTabs()) {
-      switch (key) {
-        case 'ArrowLeft':
-        case 'ArrowRight':
-          this.moveTabFocus(key === 'ArrowLeft' ? -1 : 1);
+    switch (key) {
+      case 'ArrowUp':
+        this.moveFocus(-1);
+        handled = true;
+        break;
+      case 'ArrowDown':
+        this.moveFocus(1);
+        handled = true;
+        break;
+      case 'ArrowLeft':
+        // Only handle left/right for tabs
+        if (this.isOnTabs()) {
+          this.moveTabFocus(-1);
           handled = true;
-          break;
-        case 'ArrowDown':
-          // Move from tabs to content
-          this.focusIndex = 0; // First content element
-          this.updateFocus();
+        }
+        break;
+      case 'ArrowRight':
+        // Only handle left/right for tabs
+        if (this.isOnTabs()) {
+          this.moveTabFocus(1);
           handled = true;
-          break;
-        case 'Enter':
-          // Switch to selected tab
-          const currentTab = this.overlay.querySelector('.tab-button.focused');
-          if (currentTab && !currentTab.classList.contains('disabled')) {
-            this.switchTab(currentTab.dataset.tab);
-          }
-          handled = true;
-          break;
-        case 'Escape':
-          this.callbacks.onCancel();
-          handled = true;
-          break;
-      }
-    } else {
-      // Regular content navigation
-      switch (key) {
-        case 'ArrowUp':
-          if (this.focusIndex === 0) {
-            // Move to tabs
-            this.focusOnTabs();
-          } else {
-            this.moveFocus(-1);
-          }
-          handled = true;
-          break;
-        case 'ArrowDown':
-          this.moveFocus(1);
-          handled = true;
-          break;
-        case 'ArrowLeft':
-        case 'ArrowRight':
-          // Only handle if we're on tabs
-          break;
-        case 'Enter':
-          this.activateCurrentElement();
-          handled = true;
-          break;
-        case 'Escape':
-          this.callbacks.onCancel();
-          handled = true;
-          break;
-      }
-    }
-
-    if (handled) {
-      console.log(`Settings handled key: ${key}`);
-    } else {
-      console.log(`Settings did not handle key: ${key}`);
+        }
+        break;
+      case 'Enter':
+        this.activateCurrentElement();
+        handled = true;
+        break;
+      case 'Escape':
+        this.callbacks.onCancel();
+        handled = true;
+        break;
     }
 
     return handled;
-  }
-
-  toggleGroup(groupId) {
-    const title = this.overlay.querySelector(`[data-group="${groupId}"]`);
-    const content = this.overlay.querySelector(`#${groupId}-content`);
-    
-    if (this.collapsedGroups.has(groupId)) {
-      this.collapsedGroups.delete(groupId);
-      title.classList.add('expanded');
-      content.classList.remove('collapsed');
-      content.classList.add('expanded');
-    } else {
-      this.collapsedGroups.add(groupId);
-      title.classList.remove('expanded');
-      content.classList.remove('expanded');
-      content.classList.add('collapsed');
-    }
-    
-    this.updateFocusableElements();
-    this.updateFocus();
-  }
-
-  moveFocus(direction) {
-    this.focusIndex = Math.max(0, Math.min(this.focusableElements.length - 1, this.focusIndex + direction));
-    this.updateFocus();
-  }
-
-  moveTabFocus(direction) {
-    const tabs = this.focusableElements.filter(el => el.classList.contains('tab-button'));
-    const currentTabIndex = tabs.findIndex(tab => tab.classList.contains('focused'));
-    const newIndex = Math.max(0, Math.min(tabs.length - 1, currentTabIndex + direction));
-    this.focusIndex = this.focusableElements.indexOf(tabs[newIndex]);
-    this.updateFocus();
   }
 
   isOnTabs() {
@@ -809,10 +786,78 @@ class SimplifiedNavigation {
     return current && current.classList.contains('tab-button');
   }
 
+  moveTabFocus(direction) {
+    const tabs = this.focusableElements.filter(el => el.classList.contains('tab-button'));
+    const currentTab = this.focusableElements[this.focusIndex];
+    const currentTabIndex = tabs.indexOf(currentTab);
+    
+    if (currentTabIndex !== -1) {
+      const newTabIndex = Math.max(0, Math.min(tabs.length - 1, currentTabIndex + direction));
+      const newTab = tabs[newTabIndex];
+      this.focusIndex = this.focusableElements.indexOf(newTab);
+      this.updateFocus();
+    }
+  }
+
+  moveFocus(direction) {
+    const oldIndex = this.focusIndex;
+    this.focusIndex = Math.max(0, Math.min(this.focusableElements.length - 1, this.focusIndex + direction));
+    
+    // Auto-scroll to keep focused element visible
+    this.scrollToFocusedElement();
+    
+    this.updateFocus();
+    
+    console.log(`⚙️ Focus moved from ${oldIndex} to ${this.focusIndex} (direction: ${direction})`);
+  }
+
+  scrollToFocusedElement() {
+    const current = this.focusableElements[this.focusIndex];
+    if (current) {
+      // Scroll the settings content container to keep the focused element visible
+      const contentContainer = this.overlay.querySelector('.settings-content');
+      if (contentContainer) {
+        current.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+          inline: 'nearest'
+        });
+      }
+    }
+  }
+
+  toggleGroup(groupId) {
+    const title = this.overlay.querySelector(`[data-group="${groupId}"]`);
+    const content = this.overlay.querySelector(`#${groupId}-content`);
+    
+    if (!title || !content) return;
+    
+    if (this.collapsedGroups.has(groupId)) {
+      // Expanding
+      this.collapsedGroups.delete(groupId);
+      title.classList.add('expanded');
+      content.classList.remove('collapsed');
+      content.classList.add('expanded');
+      console.log(`⚙️ Expanded group: ${groupId}`);
+    } else {
+      // Collapsing
+      this.collapsedGroups.add(groupId);
+      title.classList.remove('expanded');
+      content.classList.remove('expanded');
+      content.classList.add('collapsed');
+      console.log(`⚙️ Collapsed group: ${groupId}`);
+    }
+    
+    // Update focusable elements after toggle
+    this.updateFocusableElements();
+    this.updateFocus();
+  }
+
   switchTab(tabId) {
+    console.log(`⚙️ Switching to tab: ${tabId}`);
+    
     this.overlay.querySelectorAll('.tab-button').forEach(tab => {
       tab.classList.toggle('active', tab.dataset.tab === tabId);
-      tab.classList.remove('focused'); // Clear focus when switching
     });
 
     this.overlay.querySelectorAll('.tab-panel').forEach(panel => {
@@ -820,61 +865,121 @@ class SimplifiedNavigation {
     });
 
     this.currentTab = tabId;
-    this.updateFocusableElements();
-    this.focusIndex = 0;
-    this.updateFocus();
     
-    console.log(`Switched to tab: ${tabId}`);
+    // Update focusable elements for new tab
+    this.updateFocusableElements();
+    
+    // Find first non-tab element to focus on
+    const firstContentElement = this.focusableElements.find(el => !el.classList.contains('tab-button'));
+    if (firstContentElement) {
+      this.focusIndex = this.focusableElements.indexOf(firstContentElement);
+    } else {
+      this.focusIndex = 0;
+    }
+    
+    this.updateFocus();
   }
 
   updateFocus() {
-    // Clear all focus styles from content elements
+    // Clear all focus styles
     this.focusableElements.forEach(el => {
       el.classList.remove('focused', 'selected');
     });
 
-    // Clear tab focus (unless we're specifically on tabs)
-    if (!this.isOnTabs()) {
-      this.overlay.querySelectorAll('.tab-button').forEach(tab => tab.classList.remove('focused'));
-    }
-
     const current = this.focusableElements[this.focusIndex];
     if (current) {
       current.classList.add('focused');
-      if (!current.classList.contains('group-title')) {
+      
+      // Add 'selected' class for form controls and buttons
+      if (!current.classList.contains('group-title') && !current.classList.contains('tab-button')) {
         current.classList.add('selected');
       }
-      console.log(`Focused on: ${current.tagName}${current.id ? '#' + current.id : ''}${current.dataset.group ? '[' + current.dataset.group + ']' : ''}`);
+      
+      console.log(`⚙️ Focused on: ${this.getElementDescription(current)}`);
     }
   }
 
-  activateCurrentElement() {
-    // Handle tab activation separately
-    if (this.isOnTabs()) {
-      const currentTab = this.overlay.querySelector('.tab-button.focused');
-      if (currentTab && !currentTab.classList.contains('disabled')) {
-        this.switchTab(currentTab.dataset.tab);
-      }
-      return;
+  getElementDescription(element) {
+    if (element.classList.contains('tab-button')) {
+      return `Tab: ${element.textContent}`;
+    } else if (element.classList.contains('group-title')) {
+      return `Group: ${element.dataset.group}`;
+    } else if (element.classList.contains('form-control')) {
+      return `Control: ${element.id || element.dataset.setting}`;
+    } else if (element.classList.contains('btn')) {
+      return `Button: ${element.textContent}`;
     }
+    return element.tagName + (element.id ? '#' + element.id : '');
+  }
 
+  activateCurrentElement() {
     const current = this.focusableElements[this.focusIndex];
-    if (current) {
-      if (current.classList.contains('group-title')) {
-        this.toggleGroup(current.dataset.group);
-      } else if (current.classList.contains('btn')) {
-        // Handle buttons
-        current.click();
-      } else {
-        // For form controls, focus them so user can interact
-        current.focus();
-        console.log(`Focused form control: ${current.id}`);
+    if (!current) return;
+
+    console.log(`⚙️ Activating: ${this.getElementDescription(current)}`);
+
+    if (current.classList.contains('tab-button')) {
+      // Switch tabs
+      if (!current.classList.contains('disabled')) {
+        this.switchTab(current.dataset.tab);
       }
+    } else if (current.classList.contains('group-title')) {
+      // Toggle group
+      this.toggleGroup(current.dataset.group);
+    } else if (current.classList.contains('btn')) {
+      // Click button
+      current.click();
+    } else if (current.classList.contains('form-control')) {
+      // FIXED: Properly activate form controls
+      this.activateFormControl(current);
+    }
+  }
+
+  activateFormControl(control) {
+    console.log(`⚙️ Activating form control: ${control.id}, type: ${control.type}`);
+    
+    if (control.type === 'time' || control.type === 'number') {
+      // For time and number inputs, focus and select the content
+      control.focus();
+      control.select();
+      console.log(`⚙️ Focused and selected ${control.type} input`);
+    } else if (control.tagName.toLowerCase() === 'select') {
+      // For select elements, focus and simulate opening
+      control.focus();
+      
+      // Try to open the select dropdown
+      try {
+        // Create a synthetic click event to open dropdown
+        const clickEvent = new MouseEvent('click', {
+          bubbles: true,
+          cancelable: true,
+          view: window
+        });
+        control.dispatchEvent(clickEvent);
+        console.log(`⚙️ Focused and opened select dropdown`);
+      } catch (error) {
+        console.log(`⚙️ Focused select (dropdown opening not supported)`);
+      }
+    } else {
+      // For other inputs, just focus
+      control.focus();
+      console.log(`⚙️ Focused input`);
+    }
+  }
+
+  // Focus on first tab (for navigation from content back to tabs)
+  focusOnFirstTab() {
+    const firstTab = this.focusableElements.find(el => el.classList.contains('tab-button'));
+    if (firstTab) {
+      this.focusIndex = this.focusableElements.indexOf(firstTab);
+      this.updateFocus();
+      console.log(`⚙️ Focused on first tab`);
     }
   }
 
   destroy() {
-    // Remove event listeners if needed
+    // Cleanup if needed
+    console.log(`⚙️ Navigation destroyed`);
   }
 }
 

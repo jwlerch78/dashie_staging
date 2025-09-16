@@ -1,11 +1,9 @@
-// js/main.js - App Initialization & Orchestration with Centralized Settings
+// js/main.js - App Initialization & Orchestration (Fixed to eliminate duplicate auth)
 import { initializeEvents } from './core/events.js';
 import { updateFocus, initializeHighlightTimeout } from './core/navigation.js';
 import { renderGrid, renderSidebar } from './ui/grid.js';
 import { initializeSettings } from './settings/settings-main.js';
 import { initializeThemeSystem } from './core/theme.js';
-import { AuthManager } from './auth/auth-manager.js';
-import { SimpleAuth } from './auth/simple-auth.js';
 
 // ---------------------
 // EARLY THEME APPLICATION
@@ -21,28 +19,53 @@ async function preApplyTheme() {
 }
 
 // ---------------------
-// AUTH INITIALIZATION
+// AUTH CHECK (No duplicate creation)
 // ---------------------
-// Initialize auth system early so it's available globally
-console.log('🔐 Initializing authentication system...');
-const authManager = new AuthManager();
-const simpleAuth = new SimpleAuth(authManager);
-
-// Expose globally for console access and widgets
-window.authManager = authManager;
-window.dashieAuth = simpleAuth;
-
-console.log('🔐 Auth system exposed globally');
+// Check if auth is already initialized by simple-auth.js
+function checkAuthReady() {
+  return new Promise((resolve) => {
+    // Check immediately first
+    if (window.dashieAuth) {
+      console.log('🔐 Auth system already ready');
+      resolve(true);
+      return;
+    }
+    
+    const checkInterval = setInterval(() => {
+      if (window.dashieAuth) {
+        clearInterval(checkInterval);
+        console.log('🔐 Auth system found and ready');
+        resolve(true);
+      }
+    }, 100);
+    
+    // Increased timeout to 10 seconds to account for auth initialization
+    setTimeout(() => {
+      clearInterval(checkInterval);
+      if (window.dashieAuth) {
+        console.log('🔐 Auth system found just before timeout');
+        resolve(true);
+      } else {
+        console.log('🔐 Auth system not found within timeout, continuing anyway');
+        resolve(false);
+      }
+    }, 10000);
+  });
+}
 
 // ---------------------
 // APP INITIALIZATION
 // ---------------------
 async function initializeApp() {
   console.log("Initializing Dashie Dashboard...");
-  await initializeSettings();  // Add 'await' since it's async
   
-  // Initialize theme system first (before any UI rendering)
-  // Note: Early theme application already happened above
+  // Wait for auth system to be ready (created by simple-auth.js)
+  await checkAuthReady();
+  
+  // Initialize settings early so they can load and apply theme
+  await initializeSettings();
+  
+  // Initialize theme system (after settings so theme can be applied)
   initializeThemeSystem();
   
   // Set up event listeners

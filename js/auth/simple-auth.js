@@ -1,11 +1,12 @@
-// js/auth/simple-auth.js - Updated Entry Point (Simplified)
+// js/auth/simple-auth.js - Fixed to prevent duplicate AuthManager creation
 
 import { AuthManager } from './auth-manager.js';
 
 // Create a simplified wrapper that maintains your existing API
 export class SimpleAuth {
-  constructor() {
-    this.authManager = new AuthManager();
+  constructor(existingAuthManager = null) {
+    // Use existing AuthManager if provided, otherwise create new one
+    this.authManager = existingAuthManager || new AuthManager();
   }
 
   // Delegate to AuthManager
@@ -24,19 +25,37 @@ export class SimpleAuth {
   exitApp() {
     this.authManager.exitApp();
   }
+
+  // Get Google access token (for settings system)
+  getGoogleAccessToken() {
+    return this.authManager.getGoogleAccessToken();
+  }
 }
 
-// Initialize and make globally available (maintains existing behavior)
+// FIXED: Only initialize if not already exists
 let dashieAuth = null;
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    dashieAuth = new SimpleAuth();
-  });
-} else {
+function initializeAuth() {
+  if (window.dashieAuth) {
+    console.log('🔐 dashieAuth already exists, skipping duplicate creation');
+    return window.dashieAuth;
+  }
+
+  console.log('🔐 Creating new dashieAuth instance');
   dashieAuth = new SimpleAuth();
+  window.dashieAuth = dashieAuth;
+  
+  // Also expose authManager for compatibility
+  window.authManager = dashieAuth.authManager;
+  
+  return dashieAuth;
 }
 
-window.dashieAuth = dashieAuth;
+// Initialize based on document ready state
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeAuth);
+} else {
+  initializeAuth();
+}
 
 export { SimpleAuth as default };

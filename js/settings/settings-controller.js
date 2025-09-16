@@ -1,5 +1,5 @@
 // js/settings/settings-controller.js
-// Main settings controller with database integration and real-time sync
+// Fixed controller with proper auth timing and theme application
 
 export class SettingsController {
   constructor() {
@@ -11,46 +11,16 @@ export class SettingsController {
     
     // Navigation state for two-panel UI
     this.navigationState = {
-      currentPanel: 'categories', // 'categories' or 'settings'
-      selectedCategory: 'display', // Default to display since it has working features
+      currentPanel: 'categories',
+      selectedCategory: 'display',
       selectedSetting: 0,
       categories: [
-        { 
-          id: 'accounts', 
-          label: '🔐 Accounts', 
-          icon: '🔐',
-          enabled: true 
-        },
-        { 
-          id: 'family', 
-          label: '👨‍👩‍👧‍👦 Family', 
-          icon: '👨‍👩‍👧‍👦',
-          enabled: false  // Grayed out for now
-        },
-        { 
-          id: 'widgets', 
-          label: '🖼️ Widgets', 
-          icon: '🖼️',
-          enabled: true 
-        },
-        { 
-          id: 'display', 
-          label: '🎨 Display', 
-          icon: '🎨',
-          enabled: true 
-        },
-        { 
-          id: 'system', 
-          label: '🔧 System', 
-          icon: '🔧',
-          enabled: false  // Grayed out for now
-        },
-        { 
-          id: 'about', 
-          label: 'ℹ️ About', 
-          icon: 'ℹ️',
-          enabled: false  // Grayed out for now
-        }
+        { id: 'accounts', label: '🔐 Accounts', icon: '🔐', enabled: true },
+        { id: 'family', label: '👨‍👩‍👧‍👦 Family', icon: '👨‍👩‍👧‍👦', enabled: false },
+        { id: 'widgets', label: '🖼️ Widgets', icon: '🖼️', enabled: true },
+        { id: 'display', label: '🎨 Display', icon: '🎨', enabled: true },
+        { id: 'system', label: '🔧 System', icon: '🔧', enabled: false },
+        { id: 'about', label: 'ℹ️ About', icon: 'ℹ️', enabled: false }
       ]
     };
     
@@ -59,16 +29,23 @@ export class SettingsController {
     this.handleBeforeUnload = this.handleBeforeUnload.bind(this);
   }
 
-  // Initialize the settings system
+  // FIXED: Initialize with better auth detection and error handling
   async init() {
     try {
       console.log('⚙️ Initializing Settings Controller...');
       
-      // Get current user from auth system
-      const currentUser = this.getCurrentUser();
+      // IMPROVED: Wait for auth to be ready with timeout
+      const currentUser = await this.waitForAuth(5000); // 5 second timeout
+      
       if (!currentUser) {
-        throw new Error('No authenticated user found');
+        console.warn('⚙️ ⚠️ No authenticated user, using localStorage only');
+        // Don't throw error - initialize with local storage only
+        this.currentSettings = this.getDefaultSettings();
+        this.isInitialized = true;
+        return true;
       }
+
+      console.log('⚙️ Found authenticated user:', currentUser.email);
 
       // Initialize storage with current user
       const { SimpleSupabaseStorage } = await import('../supabase/simple-supabase-storage.js');
@@ -76,7 +53,10 @@ export class SettingsController {
       
       // Load settings from database/local storage
       const loadedSettings = await this.storage.loadSettings();
-      this.currentSettings = loadedSettings || this.getDefaultSettings();
+      this.currentSettings = loadedSettings || this.getDefaultSettings(currentUser.email);
+      
+      // FIXED: Apply loaded theme immediately
+      await this.applyLoadedSettings();
       
       // Set up real-time sync
       this.setupRealtimeSync();
@@ -101,18 +81,47 @@ export class SettingsController {
     }
   }
 
-  // Get current user from the existing auth system
+  // NEW: Wait for auth system to be ready
+  async waitForAuth(timeoutMs = 5000) {
+    const startTime = Date.now();
+    
+    while (Date.now() - startTime < timeoutMs) {
+      const user = this.getCurrentUser();
+      if (user) {
+        console.log('⚙️ 🔐 Auth ready, found user:', user.email);
+        return user;
+      }
+      
+      // Wait 100ms before checking again
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    console.log('⚙️ ⚠️ Auth timeout after', timeoutMs, 'ms');
+    return null;
+  }
+
+  // IMPROVED: Better auth detection with multiple fallbacks
   getCurrentUser() {
-    // Import the auth manager to get current user
+    // Method 1: Check global dashieAuth
+    if (window.dashieAuth && window.dashieAuth.isAuthenticated()) {
+      const user = window.dashieAuth.getUser();
+      if (user) return user;
+    }
+    
+    // Method 2: Check global authManager
     if (window.authManager && window.authManager.currentUser) {
       return window.authManager.currentUser;
     }
     
-    // Fallback: try to get from localStorage
+    // Method 3: Check for saved user in localStorage
     try {
-      const savedUser = localStorage.getItem('dashie-current-user');
+      const savedUser = localStorage.getItem('dashie-user');
       if (savedUser) {
-        return JSON.parse(savedUser);
+        const parsed = JSON.parse(savedUser);
+        // Verify it's not expired (basic check)
+        if (parsed.savedAt && (Date.now() - parsed.savedAt < 30 * 24 * 60 * 60 * 1000)) {
+          return parsed;
+        }
       }
     } catch (error) {
       console.warn('Failed to get user from localStorage:', error);
@@ -121,8 +130,30 @@ export class SettingsController {
     return null;
   }
 
-  // Default settings structure
-  getDefaultSettings() {
+  // NEW: Apply loaded settings to the dashboard
+  async applyLoadedSettings() {
+    if (!this.currentSettings) return;
+    
+    // Apply theme if it exists
+    const theme = this.currentSettings.display?.theme;
+    if (theme) {
+      console.log('⚙️ 🎨 Applying loaded theme:', theme);
+      try {
+        // Import and apply theme
+        const { switchTheme } = await import('../core/theme.js');
+        switchTheme(theme);
+        console.log('⚙️ ✅ Theme applied successfully');
+      } catch (error) {
+        console.warn('⚙️ ⚠️ Failed to apply theme:', error);
+      }
+    }
+    
+    // Apply other settings as needed
+    // TODO: Add photo transition time, sleep settings, etc.
+  }
+
+  // IMPROVED: Default settings with proper user email
+  getDefaultSettings(userEmail = 'unknown@example.com') {
     return {
       // Photos widget settings
       photos: {
@@ -139,8 +170,8 @@ export class SettingsController {
       
       // Account settings
       accounts: {
-        dashieAccount: this.getCurrentUser()?.email || 'unknown@example.com',
-        connectedServices: [], // Will be populated later
+        dashieAccount: userEmail,
+        connectedServices: [],
         pinEnabled: false
       },
       
@@ -181,47 +212,63 @@ export class SettingsController {
     return current;
   }
 
-  // Set a specific setting value with dot notation
-setSetting(path, value) {
-  if (!this.isInitialized) {
-    console.warn('⚙️ Settings not initialized, cannot set:', path);
-    return false;
-  }
-
-  console.log(`⚙️ 🔧 Setting ${path} = ${value}`);
-
-  const keys = path.split('.');
-  let current = this.currentSettings;
-  
-  // Navigate to the parent object, creating nested objects as needed
-  for (let i = 0; i < keys.length - 1; i++) {
-    const key = keys[i];
-    if (!(key in current) || typeof current[key] !== 'object' || current[key] === null) {
-      current[key] = {};
+  // IMPROVED: Set setting with immediate theme application
+  setSetting(path, value) {
+    if (!this.isInitialized) {
+      console.warn('⚙️ Settings not initialized, cannot set:', path);
+      return false;
     }
-    current = current[key];
-  }
-  
-  // Set the final value
-  const finalKey = keys[keys.length - 1];
-  const oldValue = current[finalKey];
-  current[finalKey] = value;
-  
-  // Mark as dirty if value changed
-  if (oldValue !== value) {
-    this.isDirty = true;
-    this.currentSettings.lastModified = Date.now();
-    console.log(`⚙️ ✅ Setting updated: ${path} = ${value} (was: ${oldValue})`);
+
+    console.log(`⚙️ 🔧 Setting ${path} = ${value}`);
+
+    const keys = path.split('.');
+    let current = this.currentSettings;
     
-    // Auto-save after a short delay (debounced)
-    this.scheduleAutoSave();
+    // Navigate to the parent object, creating nested objects as needed
+    for (let i = 0; i < keys.length - 1; i++) {
+      const key = keys[i];
+      if (!(key in current) || typeof current[key] !== 'object' || current[key] === null) {
+        current[key] = {};
+      }
+      current = current[key];
+    }
     
-    return true;
-  } else {
-    console.log(`⚙️ ℹ️ Setting unchanged: ${path} = ${value}`);
-    return true;
+    // Set the final value
+    const finalKey = keys[keys.length - 1];
+    const oldValue = current[finalKey];
+    current[finalKey] = value;
+    
+    // Mark as dirty if value changed
+    if (oldValue !== value) {
+      this.isDirty = true;
+      this.currentSettings.lastModified = Date.now();
+      console.log(`⚙️ ✅ Setting updated: ${path} = ${value} (was: ${oldValue})`);
+      
+      // IMPROVED: Apply theme immediately if it's a theme setting
+      if (path === 'display.theme') {
+        this.applyThemeImmediate(value);
+      }
+      
+      // Auto-save after a short delay (debounced)
+      this.scheduleAutoSave();
+      
+      return true;
+    } else {
+      console.log(`⚙️ ℹ️ Setting unchanged: ${path} = ${value}`);
+      return true;
+    }
   }
-}
+
+  // NEW: Apply theme immediately when setting changes
+  async applyThemeImmediate(theme) {
+    try {
+      const { switchTheme } = await import('../core/theme.js');
+      switchTheme(theme);
+      console.log(`⚙️ 🎨 Theme applied immediately: ${theme}`);
+    } catch (error) {
+      console.warn('⚙️ ⚠️ Failed to apply theme immediately:', error);
+    }
+  }
 
   // Get all settings for a category
   getCategorySettings(categoryId) {
@@ -246,34 +293,41 @@ setSetting(path, value) {
   }
 
   // Save settings to database
-async saveSettings() {
-  console.log('⚙️ 💾 saveSettings called');
-  console.log('⚙️ 💾 isDirty:', this.isDirty);
-  console.log('⚙️ 💾 storage exists:', !!this.storage);
-  console.log('⚙️ 💾 currentSettings:', JSON.stringify(this.currentSettings, null, 2));
+  async saveSettings() {
+    console.log('⚙️ 💾 saveSettings called');
+    console.log('⚙️ 💾 isDirty:', this.isDirty);
+    console.log('⚙️ 💾 storage exists:', !!this.storage);
 
-  if (!this.isDirty) {
-    console.log('⚙️ 💾 No changes to save');
-    return true;
-  }
+    if (!this.isDirty) {
+      console.log('⚙️ 💾 No changes to save');
+      return true;
+    }
 
-  if (!this.storage) {
-    console.error('⚙️ 💾 No storage available');
-    return false;
-  }
+    if (!this.storage) {
+      console.warn('⚙️ 💾 No storage available, saving to localStorage only');
+      try {
+        localStorage.setItem('dashie-settings', JSON.stringify(this.currentSettings));
+        this.isDirty = false;
+        console.log('⚙️ ✅ Settings saved to localStorage');
+        return true;
+      } catch (error) {
+        console.error('⚙️ ❌ Failed to save to localStorage:', error);
+        return false;
+      }
+    }
 
-  try {
-    console.log('⚙️ 💾 Calling storage.saveSettings...');
-    await this.storage.saveSettings(this.currentSettings);
-    this.isDirty = false;
-    console.log('⚙️ ✅ Settings saved successfully to storage');
-    return true;
-    
-  } catch (error) {
-    console.error('⚙️ ❌ Failed to save settings to storage:', error);
-    return false;
+    try {
+      console.log('⚙️ 💾 Calling storage.saveSettings...');
+      await this.storage.saveSettings(this.currentSettings);
+      this.isDirty = false;
+      console.log('⚙️ ✅ Settings saved successfully to storage');
+      return true;
+      
+    } catch (error) {
+      console.error('⚙️ ❌ Failed to save settings to storage:', error);
+      return false;
+    }
   }
-}
 
   // Auto-save with debouncing
   scheduleAutoSave() {
@@ -310,6 +364,9 @@ async saveSettings() {
       console.log('⚙️ 🔄 Applying remote settings (newer)');
       this.currentSettings = newSettings;
       this.isDirty = false;
+      
+      // Apply the updated settings
+      this.applyLoadedSettings();
       
       // Notify UI to refresh if settings panel is open
       this.notifyUIUpdate();

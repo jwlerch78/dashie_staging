@@ -1,7 +1,7 @@
-// js/settings/settings-main.js - UPDATED to use simplified system
-// Replace your existing settings-main.js with this
+// js/settings/settings-main.js - UPDATED to use modular system
+// Main entry point for settings system
 
-import SimplifiedSettings from './simplified-settings.js';
+import SimplifiedSettings from './settings-simple-manager.js';
 
 // Global settings instance
 let settingsInstance = null;
@@ -10,7 +10,7 @@ let settingsInstance = null;
 export async function initializeSettings() {
   if (!settingsInstance) {
     settingsInstance = new SimplifiedSettings();
-    console.log('⚙️ ✅ Simplified settings system initialized');
+    console.log('⚙️ ✅ Modular settings system initialized');
   }
   return true;
 }
@@ -38,7 +38,7 @@ export function isSettingsReady() {
 
 // Handle keyboard events from main navigation (for compatibility)
 export function handleSettingsKeyPress(event) {
-  // The simplified system handles its own keyboard events
+  // The modular system handles its own keyboard events
   // This is just for compatibility with existing navigation code
   return false;
 }

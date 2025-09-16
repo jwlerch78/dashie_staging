@@ -1,118 +1,187 @@
+<!-- header.html: Header Widget -->
+/* UPDATED: Family name management with "The [Name] Family" formatting */
+
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Header</title>
-  
-  <!-- Apply theme immediately to prevent flash -->
-  <script>
-    (function() {
-      try {
-        const savedTheme = localStorage.getItem('dashie-theme') || 'dark';
-        document.documentElement.className = `theme-${savedTheme}`;
-        if (document.body) {
-          document.body.className = `theme-${savedTheme}`;
-        } else {
-          document.addEventListener('DOMContentLoaded', function() {
-            document.body.className = `theme-${savedTheme}`;
-          });
-        }
-      } catch (e) {
-        document.documentElement.className = 'theme-dark';
-        if (document.body) document.body.className = 'theme-dark';
-      }
-    })();
-  </script>
-  
-  <!-- Import theme variables from parent -->
-  <link rel="stylesheet" href="../css/core/variables.css">
-
+  <title>Dashie Header</title>
   <style>
-    html, body {
+    body {
+      font-family: 'Arial', sans-serif;
+      color: white;
       margin: 0;
-      padding: 0;
-      overflow: hidden;
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100%;
-      width: 100%;
-      transition: background-color var(--transition-medium), color var(--transition-medium);
-    }
-    
-    #family-name {
-      font-size: 4vw;
-      font-weight: bold;
+      padding: 20px;
       text-align: center;
-      white-space: nowrap;
-      color: var(--text-primary);
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-      transition: color var(--transition-medium), text-shadow var(--transition-medium);
+      background: transparent;
+      font-weight: 300;
     }
-    
-    /* Responsive sizing */
-    @media (max-width: 600px) {
-      #family-name {
-        font-size: 6vw;
-      }
+
+    #family-name {
+      font-size: 2.5em;
+      font-weight: bold;
+      margin: 0;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+      letter-spacing: 1px;
     }
-    
-    @media (max-width: 400px) {
-      #family-name {
-        font-size: 8vw;
-      }
+
+    .date-info {
+      font-size: 1.2em;
+      margin-top: 15px;
+      opacity: 0.9;
+      font-weight: normal;
     }
   </style>
 </head>
-<body class="theme-dark">
-  <div id="family-name">The Lerch Family</div>
-  
+<body>
+  <div id="family-name">The Dashie Family</div>
+  <div class="date-info" id="date-display"></div>
+
   <script>
-    // Enhanced theme management
-    function applyTheme(theme) {
-      const themeClass = `theme-${theme}`;
-      
-      // Remove existing theme classes
-      document.documentElement.classList.remove('theme-dark', 'theme-light');
-      document.body.classList.remove('theme-dark', 'theme-light');
-      
-      // Add new theme class
-      document.documentElement.classList.add(themeClass);
-      document.body.classList.add(themeClass);
-      
-      console.log(`👨‍👩‍👧‍👦 Family header applied ${theme} theme`);
+    // UPDATED: Family name management with "The [Name] Family" formatting
+    function updateFamilyName(familyName) {
+      const element = document.getElementById('family-name');
+      if (element && familyName && familyName.trim()) {
+        // Format as "The [Name] Family" - but handle cases where user included "The" or "Family"
+        let cleanName = familyName.trim();
+        
+        // Remove "The" prefix if user included it
+        if (cleanName.toLowerCase().startsWith('the ')) {
+          cleanName = cleanName.substring(4).trim();
+        }
+        
+        // Remove "Family" suffix if user included it
+        if (cleanName.toLowerCase().endsWith(' family')) {
+          cleanName = cleanName.substring(0, cleanName.length - 7).trim();
+        }
+        
+        // Format the final display
+        element.textContent = `The ${cleanName} Family`;
+        console.log(`📄 Header: Family name updated to "The ${cleanName} Family"`);
+      } else {
+        // Fallback to default
+        element.textContent = 'The Dashie Family';
+        console.log('📄 Header: Using default family name');
+      }
     }
 
-    // Listen for theme changes from parent
+    function updateDateTime() {
+      const now = new Date();
+      const options = { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      };
+      
+      const dateStr = now.toLocaleDateString('en-US', options);
+      document.getElementById('date-display').textContent = dateStr;
+    }
+
+    // UPDATED: Enhanced initialization with multiple family name loading strategies
+    function initializeHeader() {
+      console.log('📄 Header widget initializing...');
+      
+      // Update date immediately and then every minute
+      updateDateTime();
+      setInterval(updateDateTime, 60000);
+      
+      // Strategy 1: Request family name from parent settings system
+      console.log('📄 Requesting family name from parent...');
+      try {
+        window.parent.postMessage({
+          type: 'request-family-name',
+          widget: 'header'
+        }, '*');
+      } catch (error) {
+        console.warn('📄 Could not request from parent:', error);
+      }
+      
+      // Strategy 2: Check if parent has settings available directly
+      setTimeout(() => {
+        try {
+          if (window.parent.dashieAuth && window.parent.dashieAuth.isAuthenticated()) {
+            // Try to get settings directly from parent
+            const settingsManager = window.parent.settingsManager;
+            if (settingsManager && settingsManager.getSetting) {
+              const familyName = settingsManager.getSetting('family.familyName');
+              if (familyName) {
+                updateFamilyName(familyName);
+                console.log('📄 Got family name directly from parent settings');
+                return;
+              }
+            }
+          }
+        } catch (error) {
+          console.warn('📄 Direct parent access failed:', error);
+        }
+        
+        // Strategy 3: Try localStorage as fallback
+        try {
+          const savedSettings = localStorage.getItem('dashie-settings');
+          if (savedSettings) {
+            const settings = JSON.parse(savedSettings);
+            if (settings.family && settings.family.familyName) {
+              updateFamilyName(settings.family.familyName);
+              console.log('📄 Got family name from localStorage');
+              return;
+            }
+          }
+        } catch (error) {
+          console.warn('📄 localStorage fallback failed:', error);
+        }
+        
+        console.log('📄 Using default family name');
+      }, 1000);
+      
+      // Notify parent that header is ready
+      try {
+        window.parent.postMessage({
+          type: 'widget-ready',
+          widget: 'header'
+        }, '*');
+      } catch (error) {
+        console.warn('📄 Could not notify parent of readiness:', error);
+      }
+    }
+
+    // UPDATED: Enhanced message listener for family name updates
     window.addEventListener('message', (event) => {
-      if (event.data && event.data.type === 'theme-change') {
-        const newTheme = event.data.theme;
-        applyTheme(newTheme);
+      if (event.data) {
+        console.log('📄 Header received message:', event.data.type);
+        
+        switch (event.data.type) {
+          case 'family-name-response':
+            if (event.data.familyName) {
+              updateFamilyName(event.data.familyName);
+            }
+            break;
+            
+          case 'family-name-updated':
+            if (event.data.familyName) {
+              updateFamilyName(event.data.familyName);
+              console.log('📄 Family name updated from settings change');
+            }
+            break;
+            
+          case 'theme-change':
+            // Handle theme changes if needed
+            console.log('📄 Theme change received:', event.data.theme);
+            break;
+            
+          default:
+            // console.log('📄 Unhandled message type:', event.data.type);
+            break;
+        }
       }
     });
 
-    // Request current theme from parent and send ready signal
-    window.addEventListener('load', () => {
-      if (window.parent !== window) {
-        // Request theme first
-        window.parent.postMessage({ 
-          type: 'widget-request-theme',
-          widget: 'header' 
-        }, '*');
-        
-        // Then signal ready
-        setTimeout(() => {
-          window.parent.postMessage({ 
-            type: 'widget-ready', 
-            widget: 'header' 
-          }, '*');
-        }, 100);
-      }
-    });
+    // Initialize when DOM is loaded
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeHeader);
+    } else {
+      initializeHeader();
+    }
   </script>
 </body>
 </html>
