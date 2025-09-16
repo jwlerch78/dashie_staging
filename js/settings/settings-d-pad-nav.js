@@ -1,4 +1,4 @@
-// js/settings/settings-d-pad-nav.js
+// js/settings/settings-d-pad-nav.js - FIXED: Text input editing problems
 // D-pad navigation logic for settings interface
 
 export class SimplifiedNavigation {
@@ -302,11 +302,26 @@ export class SimplifiedNavigation {
     }
   }
 
+  // FIXED: Better text input handling
   activateFormControl(control) {
     console.log(`⚙️ Activating form control: ${control.id}, type: ${control.type}`);
     
-    if (control.type === 'time' || control.type === 'number' || control.type === 'text') {
-      // For inputs, focus and select content, then disable D-pad navigation
+    if (control.type === 'text') {
+      // FIXED: Special handling for text inputs
+      control.focus();
+      
+      // Position cursor at end of text
+      setTimeout(() => {
+        control.setSelectionRange(control.value.length, control.value.length);
+      }, 10);
+      
+      console.log(`⚙️ Text input activated for editing`);
+      
+      // FIXED: Properly disable D-pad navigation for text editing
+      this.temporarilyDisableNavigation(control);
+      
+    } else if (control.type === 'time' || control.type === 'number') {
+      // For time/number inputs, focus and select content
       control.focus();
       if (control.type !== 'time') {
         // Don't select time inputs as it interferes with the picker
@@ -314,7 +329,6 @@ export class SimplifiedNavigation {
       }
       console.log(`⚙️ Focused and selected ${control.type} input`);
       
-      // FIXED: Properly disable D-pad navigation for text editing
       this.temporarilyDisableNavigation(control);
       
     } else if (control.tagName.toLowerCase() === 'select') {
@@ -357,27 +371,46 @@ export class SimplifiedNavigation {
     }
   }
 
-  // FIXED: Better navigation disabling for form controls
+  // FIXED: Much better navigation disabling for text editing
   temporarilyDisableNavigation(control) {
     // Store reference to this navigation instance
     const navigation = this;
     let isNavigationDisabled = true;
     
+    console.log(`⚙️ 🚫 Navigation disabled for text editing on ${control.id}`);
+    
     // Override handleKeyPress while editing
     const originalHandleKeyPress = this.handleKeyPress;
     this.handleKeyPress = function(event) {
       if (isNavigationDisabled && document.activeElement === control) {
-        // Allow normal text editing keys, block D-pad navigation
-        const editingKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Home', 'End', ' '];
-        if (editingKeys.includes(event.key) || event.key.length === 1) {
-          console.log(`⚙️ Allowing editing key: ${event.key}`);
+        console.log(`⚙️ 📝 Text editing key: ${event.key}`);
+        
+        // FIXED: Allow ALL normal text editing keys
+        const textEditingKeys = [
+          'Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 
+          'Tab', ' ', 'Enter'  // Added Enter for text inputs
+        ];
+        
+        // Allow single characters (letters, numbers, symbols)
+        const isSingleChar = event.key.length === 1;
+        
+        // Allow text editing keys and single characters
+        if (textEditingKeys.includes(event.key) || isSingleChar) {
+          console.log(`⚙️ ✅ Allowing text editing key: "${event.key}"`);
           return false; // Don't handle, let browser handle normally
         }
         
-        // Block D-pad navigation keys
-        if (['ArrowUp', 'ArrowDown', 'Enter'].includes(event.key)) {
-          console.log(`⚙️ Blocking navigation key while editing: ${event.key}`);
+        // ONLY block D-pad navigation keys (up/down)
+        if (['ArrowUp', 'ArrowDown'].includes(event.key)) {
+          console.log(`⚙️ 🚫 Blocking D-pad navigation key while editing: ${event.key}`);
           return true; // Block the key
+        }
+        
+        // Handle Escape to exit editing
+        if (event.key === 'Escape') {
+          console.log(`⚙️ 🏃 Escape pressed - exiting text editing mode`);
+          control.blur();
+          return true; // Handle escape
         }
       }
       
@@ -387,28 +420,20 @@ export class SimplifiedNavigation {
     
     // Re-enable navigation when done editing
     const enableNavigation = () => {
-      console.log(`⚙️ Re-enabling navigation after form edit`);
+      console.log(`⚙️ ✅ Re-enabling D-pad navigation after text edit`);
       isNavigationDisabled = false;
       navigation.handleKeyPress = originalHandleKeyPress;
       
+      // Remove event listeners
       control.removeEventListener('blur', enableNavigation);
       control.removeEventListener('change', enableNavigation);
-      control.removeEventListener('keydown', escapeHandler);
     };
     
-    // Allow Escape to exit editing mode
-    const escapeHandler = (e) => {
-      if (e.key === 'Escape') {
-        control.blur();
-        enableNavigation();
-      }
-    };
-    
+    // Auto-enable navigation when leaving the input
     control.addEventListener('blur', enableNavigation);
     control.addEventListener('change', enableNavigation);
-    control.addEventListener('keydown', escapeHandler);
     
-    console.log(`⚙️ Navigation disabled for form editing - press Escape or blur to re-enable`);
+    console.log(`⚙️ 📝 Text editing mode active - use normal keys, Escape or click away to exit`);
   }
 
   destroy() {

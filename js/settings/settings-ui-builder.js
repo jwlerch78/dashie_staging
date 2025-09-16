@@ -1,4 +1,4 @@
-// js/settings/settings-ui-builder.js
+// js/settings/settings-ui-builder.js - FIXED: Family name UI with correct placeholder and description
 // HTML generation and form population for settings interface
 
 export function buildSettingsUI() {
@@ -131,10 +131,10 @@ export function buildSettingsUI() {
               <div class="setting-row">
                 <div class="setting-label">
                   Family Name
-                  <div class="setting-description">Your family name (used in header)</div>
+                  <div class="setting-description">Just your family name (e.g. "Smith")</div>
                 </div>
                 <div class="setting-control">
-                  <input type="text" class="form-control" id="family-name" data-setting="family.familyName" placeholder="The Smith Family">
+                  <input type="text" class="form-control" id="family-name" data-setting="family.familyName" placeholder="Dashie">
                 </div>
               </div>
             </div>
@@ -214,11 +214,13 @@ export function populateFormFields(overlay, settings) {
     console.log('⚙️ Set photo transition to:', settings.photos.transitionTime);
   }
 
-  // Family settings
+  // FIXED: Family settings - populate the family name field
   const familyName = overlay.querySelector('#family-name');
-  if (familyName && settings.family?.familyName) {
-    familyName.value = settings.family.familyName;
-    console.log('⚙️ Set family name to:', settings.family.familyName);
+  if (familyName) {
+    // Set the value if it exists, otherwise use default
+    const nameValue = settings.family?.familyName || 'Dashie';
+    familyName.value = nameValue;
+    console.log('⚙️ Set family name to:', nameValue);
   }
 
   console.log('⚙️ ✅ Form fields populated successfully');
