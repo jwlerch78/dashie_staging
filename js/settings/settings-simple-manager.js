@@ -1,4 +1,4 @@
-// js/settings/settings-simple-manager.js - FIXED: Database loading and widget communication queuing
+// js/settings/settings-simple-manager.js - FIXED: Add System tab support
 // Main orchestrator for simplified settings system
 
 import { buildSettingsUI, populateFormFields, applyTheme } from './settings-ui-builder.js';
@@ -16,14 +16,14 @@ export class SimplifiedSettings {
     this.initializationAttempts = 0;
     this.maxInitAttempts = 20;
     
-    // FIXED: Queue for widget requests that arrive before controller is ready
+    // Queue for widget requests that arrive before controller is ready
     this.pendingWidgetRequests = [];
     this.controllerReady = false;
     
     // Start initialization process with delay
     setTimeout(() => this.initializeController(), 500);
 
-    // FIXED: Listen for widget requests for family name and queue them if needed
+    // Listen for widget requests for family name and queue them if needed
     window.addEventListener('message', (event) => {
       if (event.data && event.data.type === 'request-family-name') {
         console.log('👨‍👩‍👧‍👦 Widget requesting family name:', event.data.widget);
@@ -75,7 +75,7 @@ export class SimplifiedSettings {
         console.warn('⚙️ ⚠️ Settings controller initialized with fallback mode');
       }
       
-      // FIXED: Mark controller as ready and process pending requests
+      // Mark controller as ready and process pending requests
       this.controllerReady = true;
       this.processPendingWidgetRequests();
       
@@ -88,7 +88,7 @@ export class SimplifiedSettings {
     }
   }
 
-  // FIXED: Process queued widget requests once controller is ready
+  // Process queued widget requests once controller is ready
   processPendingWidgetRequests() {
     if (this.pendingWidgetRequests.length === 0) {
       console.log('👨‍👩‍👧‍👦 ✅ No pending widget requests to process');
@@ -214,8 +214,12 @@ export class SimplifiedSettings {
     };
   }
 
-  // FIXED: Default family name changed to just "Dashie"
+  // Default settings with NEW system settings
   getDefaultSettings(userEmail = 'unknown@example.com') {
+    // Detect current site for default
+    const currentSite = this.detectCurrentSite();
+    const defaultSite = currentSite !== 'other' ? currentSite : 'prod';
+    
     return {
       photos: { transitionTime: 5 },
       display: {
@@ -230,19 +234,31 @@ export class SimplifiedSettings {
         pinEnabled: false
       },
       family: {
-        familyName: 'Dashie',  // FIXED: Changed from 'The Dashie Family' to just 'Dashie'
+        familyName: 'Dashie',
         members: []
       },
+      // NEW: System settings
       system: {
-        refreshInterval: 30,
-        developer: {
-          defaultEnvironment: 'prod',
-          autoRedirect: false
-        }
+        activeSite: defaultSite, // 'prod' or 'dev'
+        autoRedirect: true, // Auto-redirect on startup
+        debugMode: false // Enable debug logging
       },
       version: '2.0.0',
       lastModified: Date.now()
     };
+  }
+
+  // NEW: Detect current site
+  detectCurrentSite() {
+    const hostname = window.location.hostname;
+    
+    if (hostname === 'dashieapp.com' || hostname === 'www.dashieapp.com') {
+      return 'prod';
+    } else if (hostname === 'dev.dashieapp.com') {
+      return 'dev';
+    } else {
+      return 'other';
+    }
   }
 
   async show() {
@@ -304,6 +320,11 @@ export class SimplifiedSettings {
   }
 
   handleSettingChange(path, value) {
+    // NEW: Handle boolean conversion for system settings
+    if (path === 'system.autoRedirect' || path === 'system.debugMode') {
+      value = value === 'true';
+    }
+    
     this.pendingChanges[path] = value;
     console.log(`⚙️ Setting changed: ${path} = ${value}`);
   }
@@ -392,7 +413,7 @@ export class SimplifiedSettings {
       });
     }
     
-    // FIXED: Update header widget with family name
+    // Update header widget with family name
     if (this.pendingChanges['family.familyName']) {
       const headerWidgets = document.querySelectorAll('iframe[src*="header.html"]');
       headerWidgets.forEach(iframe => {
@@ -408,36 +429,21 @@ export class SimplifiedSettings {
           }
         }
       });
-      
-      // Also send global event for widgets that listen to it
-      const headerFrames = document.querySelectorAll('iframe[src*="header.html"]');
-      headerFrames.forEach(iframe => {
-        if (iframe.contentWindow) {
-          try {
-            iframe.contentWindow.postMessage({
-              type: 'dashie-settings-changed',
-              detail: this.pendingChanges
-            }, '*');
-          } catch (error) {
-            console.warn('⚙️ ⚠️ Failed to send settings change to header:', error);
-          }
-        }
-      });
     }
   }
 
-  // FIXED: Enhanced family name sending with better error handling and retries
+  // Enhanced family name sending with better error handling and retries
   sendFamilyNameToWidget(widgetWindow) {
     if (!this.controller) {
       console.warn('👨‍👩‍👧‍👦 ⚠️ No controller available to get family name');
       
-      // FIXED: Try localStorage fallback immediately
+      // Try localStorage fallback immediately
       this.sendFallbackFamilyName(widgetWindow);
       return;
     }
 
     try {
-      // FIXED: Get current family name from settings with multiple attempts
+      // Get current family name from settings with multiple attempts
       let familyName = this.controller.getSetting('family.familyName');
       
       // If no family name found, try to refresh settings and try again
@@ -470,7 +476,7 @@ export class SimplifiedSettings {
     }
   }
 
-  // FIXED: Fallback method to send family name from localStorage or default
+  // Fallback method to send family name from localStorage or default
   sendFallbackFamilyName(widgetWindow) {
     let fallbackName = 'Dashie'; // Default fallback
     

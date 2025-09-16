@@ -1,5 +1,5 @@
-// widgets/calendar/calendar.js - Calendar Widget Logic with Google Calendar events
-// Option 2: Initialize calendar UI immediately, load Google events after API ready
+// widgets/calendar.html - Fixed to listen for postMessage instead of window event
+// FIXED: Updated waitForGoogleAPI to listen for postMessage from auth manager
 
 import { GoogleAPIClient } from '../../js/google-apis/google-api-client.js';
 
@@ -11,7 +11,6 @@ class CalendarWidget {
       { summary: 'jwlerch@gmail.com', color: '#1976d2', textColor: '#ffffff', id: 'calendar1', backgroundColor: '#1976d2', borderColor: '#1976d2' },
       { summary: 'Veeva', color: '#388e3c', textColor: '#ffffff', id: 'calendar2', backgroundColor: '#388e3c', borderColor: '#388e3c' }
     ];
-
     this.tuiCalendars = this.GOOGLE_CALENDARS.map(cal => ({
       id: cal.id,
       name: cal.summary,
@@ -19,12 +18,10 @@ class CalendarWidget {
       backgroundColor: cal.backgroundColor,
       borderColor: cal.borderColor
     }));
-
     this.calendar = null;
     this.currentView = 'week';
     this.currentDate = new Date();
     this.viewCycle = ['week', 'month', 'daily'];
-
     // ================= INIT =================
     this.setupEventListeners();
     this.initializeCalendar();
@@ -33,8 +30,12 @@ class CalendarWidget {
 
   setupEventListeners() {
     window.addEventListener('message', (event) => {
+      // FIXED: Handle both navigation commands AND google-apis-ready
       if (event.data && event.data.action) {
         this.handleCommand(event.data.action);
+      } else if (event.data && event.data.type === 'google-apis-ready') {
+        // FIXED: Handle google-apis-ready via postMessage
+        this.handleGoogleAPIReady(event.data);
       }
     });
 
@@ -60,63 +61,60 @@ class CalendarWidget {
     });
   }
 
- waitForGoogleAPI() {
-  window.addEventListener('google-apis-ready', async () => {
-    console.log('📅 Google APIs ready, now loading Google events...');
-    if (typeof this.loadGoogleCalendarData === 'function') {
-      await this.loadGoogleCalendarData();
-    }
-  });
-}
+  // FIXED: Replace waitForGoogleAPI with direct postMessage handler
+  waitForGoogleAPI() {
+    console.log('📅 Calendar widget waiting for Google APIs ready signal...');
+    // The actual handling is now in setupEventListeners() -> 'google-apis-ready' case
+  }
 
-  async initializeCalendar() {
-    try {
-      const monday = this.getStartOfWeek(this.currentDate);
-      this.currentDate = monday;
-
-      this.calendar = new tui.Calendar('#calendar', {
-        defaultView: this.currentView,
-        useCreationPopup: false,
-        useDetailPopup: false,
-        calendars: this.tuiCalendars,
-        week: {
-          startDayOfWeek: 1,
-          dayNames: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-          narrowWeekend: false,
-          workweek: false,
-          hourStart: 6,
-          hourEnd: 24,
-          showNowIndicator: true,
-          eventView: ['time'],
-          taskView: false
-        },
-        month: {
-          startDayOfWeek: 1,
-          dayNames: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-          visibleWeeksCount: 6,
-          isAlways6Week: false,
-          workweek: false
-        },
-        template: {
-          time: (schedule) => {
-            const calendar = this.tuiCalendars.find(cal => cal.id === schedule.calendarId);
-            const textColor = calendar ? calendar.color : '#ffffff';
-            return `<span style="color: ${textColor}; font-weight: 500;">${schedule.title}</span>`;
-          }
+  // NEW: Handle the google-apis-ready postMessage
+  async handleGoogleAPIReady(messageData) {
+    console.log('📅 🎉 Received google-apis-ready postMessage:', messageData);
+    console.log('📅 API Capabilities:', messageData.apiCapabilities);
+    
+    // Check if calendar API is available
+    if (messageData.apiCapabilities && messageData.apiCapabilities.calendar) {
+      console.log('📅 ✅ Calendar API is ready, loading Google calendar data...');
+      
+      if (typeof this.loadGoogleCalendarData === 'function') {
+        try {
+          await this.loadGoogleCalendarData();
+          console.log('📅 ✅ Google calendar data loaded successfully');
+        } catch (error) {
+          console.error('📅 ❌ Failed to load Google calendar data:', error);
         }
+      } else {
+        console.warn('📅 ⚠️ loadGoogleCalendarData method not found');
+      }
+    } else {
+      console.warn('📅 ⚠️ Calendar API not available:', {
+        hasApiCapabilities: !!messageData.apiCapabilities,
+        calendarStatus: messageData.apiCapabilities?.calendar,
+        tokenStatus: messageData.apiCapabilities?.tokenStatus,
+        errors: messageData.apiCapabilities?.errors
       });
-
-      this.calendar.setDate(this.currentDate);
-      this.showCalendar();
-      this.updateCalendarHeader();
-      setTimeout(() => this.scrollToTime(8), 200);
-
-      console.log('📅 Calendar initialized in', this.currentView, 'view');
-    } catch (error) {
-      console.error('📅 Failed to initialize calendar:', error);
-      document.getElementById('loading').textContent = 'Failed to load calendar';
+      
+      // Show error message to user
+      this.showCalendarError('Google Calendar API is not available. Please check your authentication.');
     }
   }
+
+  // NEW: Show error message in calendar widget
+  showCalendarError(message) {
+    const calendarContainer = document.getElementById('calendar');
+    if (calendarContainer) {
+      calendarContainer.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #666; text-align: center; padding: 20px;">
+          <div>
+            <div style="font-size: 48px; margin-bottom: 16px;">📅</div>
+            <div style="font-size: 16px; font-weight: 500; margin-bottom: 8px;">Calendar Unavailable</div>
+            <div style="font-size: 14px;">${message}</div>
+          </div>
+        </div>
+      `;
+    }
+  }
+
 
   showCalendar() {
     document.getElementById('loading').style.display = 'none';

@@ -1,5 +1,5 @@
-// js/settings/settings-controller.js - FIXED: Apply family name on load same as theme
-// Fixed controller with proper auth timing and theme application
+// js/settings/settings-controller.js - FIXED: Add site redirect functionality
+// Fixed controller with proper auth timing and site redirect system
 
 export class SettingsController {
   constructor() {
@@ -19,7 +19,7 @@ export class SettingsController {
         { id: 'family', label: '👨‍👩‍👧‍👦 Family', icon: '👨‍👩‍👧‍👦', enabled: false },
         { id: 'widgets', label: '🖼️ Widgets', icon: '🖼️', enabled: true },
         { id: 'display', label: '🎨 Display', icon: '🎨', enabled: true },
-        { id: 'system', label: '🔧 System', icon: '🔧', enabled: false },
+        { id: 'system', label: '🔧 System', icon: '🔧', enabled: true }, // NOW ENABLED
         { id: 'about', label: 'ℹ️ About', icon: 'ℹ️', enabled: false }
       ]
     };
@@ -29,12 +29,12 @@ export class SettingsController {
     this.handleBeforeUnload = this.handleBeforeUnload.bind(this);
   }
 
-  // FIXED: Initialize with better auth detection and error handling
+  // Initialize with better auth detection and error handling
   async init() {
     try {
       console.log('⚙️ Initializing Settings Controller...');
       
-      // IMPROVED: Wait for auth to be ready with timeout
+      // Wait for auth to be ready with timeout
       const currentUser = await this.waitForAuth(5000); // 5 second timeout
       
       if (!currentUser) {
@@ -42,6 +42,10 @@ export class SettingsController {
         // Don't throw error - initialize with local storage only
         this.currentSettings = this.getDefaultSettings();
         this.isInitialized = true;
+        
+        // NEW: Check site redirect even without auth
+        await this.checkSiteRedirect();
+        
         return true;
       }
 
@@ -55,8 +59,11 @@ export class SettingsController {
       const loadedSettings = await this.storage.loadSettings();
       this.currentSettings = loadedSettings || this.getDefaultSettings(currentUser.email);
       
-      // FIXED: Apply loaded settings immediately (theme AND family name)
+      // Apply loaded settings immediately (theme AND family name)
       await this.applyLoadedSettings();
+      
+      // NEW: Check site redirect after settings are loaded
+      await this.checkSiteRedirect();
       
       // Set up real-time sync
       this.setupRealtimeSync();
@@ -77,11 +84,227 @@ export class SettingsController {
       this.currentSettings = this.getDefaultSettings();
       this.isInitialized = true;
       
+      // Still check site redirect on fallback
+      await this.checkSiteRedirect();
+      
       return false;
     }
   }
 
-  // NEW: Wait for auth system to be ready
+  // NEW: Site redirect functionality
+  async checkSiteRedirect() {
+    try {
+      const autoRedirect = this.currentSettings.system?.autoRedirect;
+      const targetSite = this.currentSettings.system?.activeSite || 'prod';
+      const currentSite = this.detectCurrentSite();
+      
+      console.log('🌐 Site redirect check:', {
+        autoRedirect,
+        targetSite,
+        currentSite,
+        shouldRedirect: autoRedirect && targetSite !== currentSite
+      });
+      
+      if (autoRedirect && targetSite !== currentSite) {
+        console.log(`🌐 Auto-redirecting from ${currentSite} to ${targetSite}`);
+        this.performSiteRedirect(targetSite, false); // false = no confirmation on startup
+      } else {
+        console.log('🌐 No redirect needed');
+      }
+    } catch (error) {
+      console.error('🌐 ❌ Site redirect check failed:', error);
+    }
+  }
+
+  // NEW: Detect current site
+  detectCurrentSite() {
+    const hostname = window.location.hostname;
+    
+    if (hostname === 'dashieapp.com' || hostname === 'www.dashieapp.com') {
+      return 'prod';
+    } else if (hostname === 'dev.dashieapp.com') {
+      return 'dev';
+    } else {
+      return 'other';
+    }
+  }
+
+  // NEW: Perform site redirect
+  performSiteRedirect(targetSite, showConfirmation = true) {
+    const urls = {
+      prod: 'https://dashieapp.com',
+      dev: 'https://dev.dashieapp.com'
+    };
+    
+    const targetUrl = urls[targetSite];
+    if (!targetUrl) {
+      console.error('🌐 ❌ Invalid target site:', targetSite);
+      return;
+    }
+    
+    const currentSite = this.detectCurrentSite();
+    if (currentSite === targetSite) {
+      console.log('🌐 Already on target site, no redirect needed');
+      return;
+    }
+    
+    if (showConfirmation) {
+      // Show confirmation modal
+      this.showSiteChangeConfirmation(targetSite, targetUrl);
+    } else {
+      // Direct redirect (startup)
+      console.log(`🌐 🔄 Redirecting to ${targetUrl}`);
+      window.location.href = targetUrl;
+    }
+  }
+
+  // NEW: Show site change confirmation modal
+  showSiteChangeConfirmation(targetSite, targetUrl) {
+    const siteName = targetSite === 'prod' ? 'Production' : 'Development';
+    
+    const modal = document.createElement('div');
+    modal.className = 'site-change-modal-backdrop';
+    modal.innerHTML = `
+      <div class="site-change-modal">
+        <div class="modal-header">
+          <h3>Switch to ${siteName} Site?</h3>
+        </div>
+        <div class="modal-content">
+          <p>You are about to switch to the ${siteName} site:</p>
+          <div class="target-url">${targetUrl}</div>
+          <p>This will redirect you to a different site. Continue?</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="site-change-cancel">Cancel</button>
+          <button class="btn btn-primary" id="site-change-confirm">Switch Site</button>
+        </div>
+      </div>
+    `;
+    
+    // Add modal styles
+    const style = document.createElement('style');
+    style.textContent = `
+      .site-change-modal-backdrop {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10001;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+      
+      .site-change-modal {
+        background: #FCFCFF;
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        color: #424242;
+      }
+      
+      .site-change-modal .modal-header h3 {
+        margin: 0 0 16px 0;
+        font-size: 20px;
+        color: #424242;
+      }
+      
+      .site-change-modal .modal-content p {
+        margin: 8px 0;
+        font-size: 14px;
+        line-height: 1.4;
+      }
+      
+      .site-change-modal .target-url {
+        background: #f8f9fa;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 13px;
+        margin: 12px 0;
+        border: 1px solid #dadce0;
+        color: #1a73e8;
+      }
+      
+      .site-change-modal .modal-footer {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+        margin-top: 20px;
+      }
+      
+      .site-change-modal .btn {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      
+      .site-change-modal .btn-secondary {
+        background: #f8f9fa;
+        color: #5f6368;
+        border: 1px solid #dadce0;
+      }
+      
+      .site-change-modal .btn-primary {
+        background: #1a73e8;
+        color: white;
+      }
+      
+      .site-change-modal .btn:hover {
+        transform: translateY(-1px);
+      }
+    `;
+    
+    document.head.appendChild(style);
+    document.body.appendChild(modal);
+    
+    // Add event listeners
+    modal.querySelector('#site-change-cancel').addEventListener('click', () => {
+      modal.remove();
+      style.remove();
+      
+      // Revert the setting
+      this.revertSiteSetting();
+    });
+    
+    modal.querySelector('#site-change-confirm').addEventListener('click', () => {
+      modal.remove();
+      style.remove();
+      
+      console.log(`🌐 🔄 User confirmed redirect to ${targetUrl}`);
+      window.location.href = targetUrl;
+    });
+    
+    // Click backdrop to cancel
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.querySelector('#site-change-cancel').click();
+      }
+    });
+  }
+
+  // NEW: Revert site setting if user cancels
+  revertSiteSetting() {
+    const currentSite = this.detectCurrentSite();
+    if (currentSite !== 'other') {
+      console.log('🌐 🔄 Reverting site setting to current site:', currentSite);
+      this.setSetting('system.activeSite', currentSite);
+      
+      // Update UI if settings modal is open
+      const activeSiteSelect = document.querySelector('#active-site-select');
+      if (activeSiteSelect) {
+        activeSiteSelect.value = currentSite;
+      }
+    }
+  }
+
+  // Wait for auth system to be ready
   async waitForAuth(timeoutMs = 5000) {
     const startTime = Date.now();
     
@@ -100,7 +323,7 @@ export class SettingsController {
     return null;
   }
 
-  // IMPROVED: Better auth detection with multiple fallbacks
+  // Better auth detection with multiple fallbacks
   getCurrentUser() {
     // Method 1: Check global dashieAuth
     if (window.dashieAuth && window.dashieAuth.isAuthenticated()) {
@@ -130,7 +353,7 @@ export class SettingsController {
     return null;
   }
 
-  // FIXED: Apply loaded settings to the dashboard (theme AND family name)
+  // Apply loaded settings to the dashboard (theme AND family name)
   async applyLoadedSettings() {
     if (!this.currentSettings) return;
     
@@ -148,7 +371,7 @@ export class SettingsController {
       }
     }
     
-    // FIXED: Apply family name to header widgets (same pattern as theme)
+    // Apply family name to header widgets (same pattern as theme)
     const familyName = this.currentSettings.family?.familyName;
     if (familyName) {
       console.log('⚙️ 👨‍👩‍👧‍👦 Applying loaded family name:', familyName);
@@ -164,7 +387,7 @@ export class SettingsController {
     // TODO: Add photo transition time, sleep settings, etc.
   }
 
-  // FIXED: New method to apply family name to widgets (mirrors theme application)
+  // Apply family name to widgets (mirrors theme application)
   async applyFamilyNameToWidgets(familyName) {
     // Give widgets time to load before sending family name
     setTimeout(() => {
@@ -197,8 +420,12 @@ export class SettingsController {
     }, 1000); // Wait 1 second for widgets to load
   }
 
-  // IMPROVED: Default settings with proper user email
+  // Default settings with proper user email and NEW system settings
   getDefaultSettings(userEmail = 'unknown@example.com') {
+    // Detect current site for default
+    const currentSite = this.detectCurrentSite();
+    const defaultSite = currentSite !== 'other' ? currentSite : 'prod';
+    
     return {
       // Photos widget settings
       photos: {
@@ -220,19 +447,18 @@ export class SettingsController {
         pinEnabled: false
       },
       
-      // Family settings (placeholder for future)
+      // Family settings
       family: {
-        familyName: 'Dashie', // FIXED: Just the family name, not "The Family"
+        familyName: 'Dashie',
         members: []
       },
       
-      // System settings (placeholder for future)
+      // NEW: System settings with site management
       system: {
-        refreshInterval: 30, // seconds
-        developer: {
-          defaultEnvironment: 'prod', // 'prod' or 'dev'
-          autoRedirect: false
-        }
+        activeSite: defaultSite, // 'prod' or 'dev'
+        autoRedirect: true, // Auto-redirect on startup
+        debugMode: false, // Enable debug logging
+        refreshInterval: 30 // seconds
       },
       
       // Metadata
@@ -257,7 +483,7 @@ export class SettingsController {
     return current;
   }
 
-  // IMPROVED: Set setting with immediate theme application
+  // Set setting with immediate application and NEW site redirect handling
   setSetting(path, value) {
     if (!this.isInitialized) {
       console.warn('⚙️ Settings not initialized, cannot set:', path);
@@ -289,14 +515,19 @@ export class SettingsController {
       this.currentSettings.lastModified = Date.now();
       console.log(`⚙️ ✅ Setting updated: ${path} = ${value} (was: ${oldValue})`);
       
-      // IMPROVED: Apply theme immediately if it's a theme setting
+      // Apply theme immediately if it's a theme setting
       if (path === 'display.theme') {
         this.applyThemeImmediate(value);
       }
       
-      // FIXED: Apply family name immediately if it's a family name setting
+      // Apply family name immediately if it's a family name setting
       if (path === 'family.familyName') {
         this.applyFamilyNameImmediate(value);
+      }
+      
+      // NEW: Handle site change immediately
+      if (path === 'system.activeSite') {
+        this.handleSiteChange(value);
       }
       
       // Auto-save after a short delay (debounced)
@@ -309,7 +540,23 @@ export class SettingsController {
     }
   }
 
-  // NEW: Apply theme immediately when setting changes
+  // NEW: Handle site change
+  handleSiteChange(newSite) {
+    const currentSite = this.detectCurrentSite();
+    
+    console.log('🌐 Site setting changed:', {
+      newSite,
+      currentSite,
+      needsRedirect: newSite !== currentSite
+    });
+    
+    if (newSite !== currentSite) {
+      // Show confirmation and redirect
+      this.performSiteRedirect(newSite, true); // true = show confirmation
+    }
+  }
+
+  // Apply theme immediately when setting changes
   async applyThemeImmediate(theme) {
     try {
       const { switchTheme } = await import('../core/theme.js');
@@ -320,7 +567,7 @@ export class SettingsController {
     }
   }
 
-  // FIXED: Apply family name immediately when setting changes (mirrors theme)
+  // Apply family name immediately when setting changes
   async applyFamilyNameImmediate(familyName) {
     try {
       await this.applyFamilyNameToWidgets(familyName);
@@ -427,6 +674,9 @@ export class SettingsController {
       
       // Apply the updated settings
       this.applyLoadedSettings();
+      
+      // Check if site redirect is needed
+      this.checkSiteRedirect();
       
       // Notify UI to refresh if settings panel is open
       this.notifyUIUpdate();

@@ -1,4 +1,5 @@
 // js/google-apis/google-api-client.js - Centralized Google API client
+// FIXED: testAccess method to properly handle 401 errors and not report false positives
 
 // ==================== CONFIG VARIABLES ====================
 
@@ -221,7 +222,7 @@ export class GoogleAPIClient {
       
     } catch (error) {
       console.error('Failed to fetch calendar list:', error);
-      return [];
+      throw error; // Re-throw so testAccess can catch it properly
     }
   }
 
@@ -342,14 +343,28 @@ export class GoogleAPIClient {
   // UTILITY METHODS
   // ====================
 
+  // FIXED: Proper error handling in testAccess method
   async testAccess() {
     console.log('🧪 Testing Google API access...');
     
     const results = {
       photos: false,
       calendar: false,
-      errors: []
+      errors: [],
+      tokenStatus: 'unknown'
     };
+
+    // First, check if we have a token at all
+    const token = this.getAccessToken();
+    if (!token) {
+      results.errors.push('No access token available');
+      results.tokenStatus = 'missing';
+      console.error('❌ No Google access token available for testing');
+      return results;
+    }
+
+    console.log(`🧪 Testing with token: ${token.substring(0, 20)}... (length: ${token.length})`);
+    results.tokenStatus = 'present';
 
 /******************************************************************
 * Commenting out photos retrieval for now
@@ -363,14 +378,48 @@ export class GoogleAPIClient {
     }
 
 ******************************************************************/    
+    
+    // FIXED: Properly test calendar access with explicit error handling
     try {
-      await this.getCalendarList();
-      results.calendar = true;
-      console.log('✅ Google Calendar API access confirmed');
+      console.log('🧪 Testing Calendar API access...');
+      const calendars = await this.getCalendarList();
+      
+      // Only mark as successful if we actually got calendars back
+      if (calendars && calendars.length >= 0) {
+        results.calendar = true;
+        results.tokenStatus = 'valid';
+        console.log('✅ Google Calendar API access confirmed');
+        console.log(`✅ Found ${calendars.length} calendars`);
+      } else {
+        results.calendar = false;
+        results.errors.push('Calendar API: No calendars returned');
+        console.error('❌ Google Calendar API returned no calendars');
+      }
+      
     } catch (error) {
+      results.calendar = false;
       results.errors.push(`Calendar API: ${error.message}`);
-      console.error('❌ Google Calendar API access failed:', error);
+      
+      // Check if it's specifically a 401 error (expired/invalid token)
+      if (error.message.includes('401')) {
+        results.tokenStatus = 'expired';
+        console.error('❌ Google Calendar API access failed: Token appears to be expired or invalid');
+        console.error('❌ This is likely because the saved access token has expired (they expire after ~1 hour)');
+        console.error('❌ A proper refresh token mechanism is needed to automatically get new access tokens');
+      } else {
+        results.tokenStatus = 'error';
+        console.error('❌ Google Calendar API access failed with non-auth error:', error);
+      }
     }
+    
+    // Log final results for debugging
+    console.log('🧪 Final API test results:', {
+      calendar: results.calendar,
+      photos: results.photos,
+      tokenStatus: results.tokenStatus,
+      errorCount: results.errors.length,
+      errors: results.errors
+    });
     
     return results;
   }
