@@ -1,5 +1,18 @@
 // js/google-apis/google-api-client.js - Centralized Google API client
 
+// ==================== CONFIG VARIABLES ====================
+
+// How many months ahead to pull events
+const MONTHS_TO_PULL = 3;
+
+// Calendars to include by summary (name/email as shown in calendar list)
+const CALENDARS_TO_INCLUDE = [
+  "jwlerch@gmail.com",
+  "Veeva"
+];
+
+// ==================== GOOGLE API CLIENT ====================
+
 export class GoogleAPIClient {
   constructor(authManager) {
     this.authManager = authManager;
@@ -14,20 +27,21 @@ export class GoogleAPIClient {
   // Generic API request method with error handling
   async makeRequest(endpoint, options = {}) {
     const token = this.getAccessToken();
-  if (!token) {
-    throw new Error('No Google access token available');
-  }
+    if (!token) {
+      throw new Error('No Google access token available');
+    }
 
-  let url;
-  if (endpoint.startsWith('http')) {
-    url = endpoint;
-  } else if (endpoint.startsWith('/v1/')) {
-    // Photos API endpoints use photoslibrary domain
-    url = `https://photoslibrary.googleapis.com${endpoint}`;
-  } else {
-    // Other APIs use standard domain
-    url = `${this.baseUrl}${endpoint}`;
-  }    
+    let url;
+    if (endpoint.startsWith('http')) {
+      url = endpoint;
+    } else if (endpoint.startsWith('/v1/')) {
+      // Photos API endpoints use photoslibrary domain
+      url = `https://photoslibrary.googleapis.com${endpoint}`;
+    } else {
+      // Other APIs use standard domain
+      url = `${this.baseUrl}${endpoint}`;
+    }    
+
     const requestOptions = {
       method: 'GET',
       headers: {
@@ -63,7 +77,6 @@ export class GoogleAPIClient {
   // GOOGLE PHOTOS METHODS
   // ====================
 
-  // Get all photo albums
   async getPhotoAlbums() {
     console.log('📸 Fetching Google Photos albums...');
     
@@ -93,7 +106,6 @@ export class GoogleAPIClient {
     }
   }
 
-  // Get photos from a specific album
   async getAlbumPhotos(albumId, pageSize = 50, pageToken = null) {
     console.log(`📸 Fetching photos from album: ${albumId}`);
     
@@ -124,9 +136,8 @@ export class GoogleAPIClient {
           creationTime: item.mediaMetadata?.creationTime,
           width: item.mediaMetadata?.width,
           height: item.mediaMetadata?.height,
-          // Generate display URL with size parameters
-          displayUrl: `${item.baseUrl}=w1920-h1080-c`, // Fit to 1920x1080, cropped
-          thumbnailUrl: `${item.baseUrl}=w300-h300-c`   // 300x300 thumbnail
+          displayUrl: `${item.baseUrl}=w1920-h1080-c`,
+          thumbnailUrl: `${item.baseUrl}=w300-h300-c`
         })),
         nextPageToken: response.nextPageToken
       };
@@ -137,7 +148,6 @@ export class GoogleAPIClient {
     }
   }
 
-  // Get recent photos (no album specified)
   async getRecentPhotos(pageSize = 50, pageToken = null) {
     console.log('📸 Fetching recent photos...');
     
@@ -146,7 +156,7 @@ export class GoogleAPIClient {
         pageSize: pageSize,
         filters: {
           mediaTypeFilter: {
-            mediaTypes: ['PHOTO'] // Only photos, no videos
+            mediaTypes: ['PHOTO']
           }
         }
       };
@@ -188,7 +198,6 @@ export class GoogleAPIClient {
   // GOOGLE CALENDAR METHODS
   // ====================
 
-  // Get all calendar lists
   async getCalendarList() {
     console.log('📅 Fetching Google Calendar list...');
     
@@ -216,7 +225,6 @@ export class GoogleAPIClient {
     }
   }
 
-  // Get events from a specific calendar
   async getCalendarEvents(calendarId, timeMin = null, timeMax = null, maxResults = 250) {
     console.log(`📅 Fetching events from calendar: ${calendarId}`);
     
@@ -227,13 +235,12 @@ export class GoogleAPIClient {
         orderBy: 'startTime'
       });
       
-      // Default to next 30 days if no time range specified
       if (!timeMin) {
         timeMin = new Date().toISOString();
       }
       if (!timeMax) {
         const maxDate = new Date();
-        maxDate.setDate(maxDate.getDate() + 30);
+        maxDate.setMonth(maxDate.getMonth() + MONTHS_TO_PULL);
         timeMax = maxDate.toISOString();
       }
       
@@ -258,7 +265,6 @@ export class GoogleAPIClient {
         status: event.status,
         htmlLink: event.htmlLink,
         calendarId: calendarId,
-        // Computed fields
         isAllDay: !!event.start.date,
         startDateTime: event.start.dateTime || event.start.date,
         endDateTime: event.end.dateTime || event.end.date
@@ -270,24 +276,21 @@ export class GoogleAPIClient {
     }
   }
 
-  // Get events from all calendars
   async getAllCalendarEvents(timeMin = null, timeMax = null) {
     console.log('📅 Fetching events from all calendars...');
     
     try {
-      // First get the calendar list
       const calendars = await this.getCalendarList();
       
-      // Filter to only selected/accessible calendars
-      const accessibleCalendars = calendars.filter(cal => 
-        cal.selected !== false && 
-        ['owner', 'writer', 'reader'].includes(cal.accessRole)
+      // Filter calendars by our config list
+      const filteredCalendars = calendars.filter(cal =>
+        CALENDARS_TO_INCLUDE.includes(cal.summary)
       );
       
-      console.log(`📅 Fetching events from ${accessibleCalendars.length} accessible calendars`);
-      
-      // Fetch events from each calendar
-      const allEventPromises = accessibleCalendars.map(calendar => 
+      console.log(`📅 Fetching events from ${filteredCalendars.length} configured calendars`);
+
+      // Fetch events from each
+      const allEventPromises = filteredCalendars.map(calendar => 
         this.getCalendarEvents(calendar.id, timeMin, timeMax)
           .then(events => ({
             calendar: calendar,
@@ -301,7 +304,6 @@ export class GoogleAPIClient {
       
       const calendarResults = await Promise.all(allEventPromises);
       
-      // Flatten all events and add calendar info
       const allEvents = [];
       calendarResults.forEach(result => {
         result.events.forEach(event => {
@@ -314,7 +316,6 @@ export class GoogleAPIClient {
         });
       });
       
-      // Sort by start time
       allEvents.sort((a, b) => 
         new Date(a.startDateTime) - new Date(b.startDateTime)
       );
@@ -323,10 +324,10 @@ export class GoogleAPIClient {
       
       return {
         events: allEvents,
-        calendars: accessibleCalendars,
+        calendars: filteredCalendars,
         summary: {
           totalEvents: allEvents.length,
-          totalCalendars: accessibleCalendars.length,
+          totalCalendars: filteredCalendars.length,
           timeRange: { timeMin, timeMax }
         }
       };
@@ -341,7 +342,6 @@ export class GoogleAPIClient {
   // UTILITY METHODS
   // ====================
 
-  // Test API access
   async testAccess() {
     console.log('🧪 Testing Google API access...');
     
@@ -350,8 +350,9 @@ export class GoogleAPIClient {
       calendar: false,
       errors: []
     };
-    
-    // Test Photos API
+
+/******************************************************************
+* Commenting out photos retrieval for now
     try {
       await this.getPhotoAlbums();
       results.photos = true;
@@ -360,8 +361,8 @@ export class GoogleAPIClient {
       results.errors.push(`Photos API: ${error.message}`);
       console.error('❌ Google Photos API access failed:', error);
     }
-    
-    // Test Calendar API
+
+******************************************************************/    
     try {
       await this.getCalendarList();
       results.calendar = true;

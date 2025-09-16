@@ -1,4 +1,4 @@
-// js/settings/settings-controller.js
+// js/settings/settings-controller.js - FIXED: Apply family name on load same as theme
 // Fixed controller with proper auth timing and theme application
 
 export class SettingsController {
@@ -55,7 +55,7 @@ export class SettingsController {
       const loadedSettings = await this.storage.loadSettings();
       this.currentSettings = loadedSettings || this.getDefaultSettings(currentUser.email);
       
-      // FIXED: Apply loaded theme immediately
+      // FIXED: Apply loaded settings immediately (theme AND family name)
       await this.applyLoadedSettings();
       
       // Set up real-time sync
@@ -130,7 +130,7 @@ export class SettingsController {
     return null;
   }
 
-  // NEW: Apply loaded settings to the dashboard
+  // FIXED: Apply loaded settings to the dashboard (theme AND family name)
   async applyLoadedSettings() {
     if (!this.currentSettings) return;
     
@@ -148,8 +148,53 @@ export class SettingsController {
       }
     }
     
+    // FIXED: Apply family name to header widgets (same pattern as theme)
+    const familyName = this.currentSettings.family?.familyName;
+    if (familyName) {
+      console.log('⚙️ 👨‍👩‍👧‍👦 Applying loaded family name:', familyName);
+      try {
+        await this.applyFamilyNameToWidgets(familyName);
+        console.log('⚙️ ✅ Family name applied successfully');
+      } catch (error) {
+        console.warn('⚙️ ⚠️ Failed to apply family name:', error);
+      }
+    }
+    
     // Apply other settings as needed
     // TODO: Add photo transition time, sleep settings, etc.
+  }
+
+  // FIXED: New method to apply family name to widgets (mirrors theme application)
+  async applyFamilyNameToWidgets(familyName) {
+    // Give widgets time to load before sending family name
+    setTimeout(() => {
+      const headerWidgets = document.querySelectorAll('iframe[src*="header.html"]');
+      
+      console.log(`👨‍👩‍👧‍👦 📤 Sending family name "${familyName}" to ${headerWidgets.length} header widgets`);
+      
+      headerWidgets.forEach((iframe, index) => {
+        if (iframe.contentWindow) {
+          try {
+            iframe.contentWindow.postMessage({
+              type: 'family-name-update',
+              familyName: familyName
+            }, '*');
+            
+            console.log(`👨‍👩‍👧‍👦 ✅ Sent family name to header widget ${index + 1}`);
+          } catch (error) {
+            console.warn(`👨‍👩‍👧‍👦 ⚠️ Failed to send family name to header widget ${index + 1}:`, error);
+          }
+        } else {
+          console.warn(`👨‍👩‍👧‍👦 ⚠️ Header widget ${index + 1} contentWindow not available`);
+        }
+      });
+      
+      // Also dispatch global event
+      window.dispatchEvent(new CustomEvent('dashie-family-name-loaded', {
+        detail: { familyName }
+      }));
+      
+    }, 1000); // Wait 1 second for widgets to load
   }
 
   // IMPROVED: Default settings with proper user email
@@ -177,7 +222,7 @@ export class SettingsController {
       
       // Family settings (placeholder for future)
       family: {
-        familyName: '',
+        familyName: 'Dashie', // FIXED: Just the family name, not "The Family"
         members: []
       },
       
@@ -249,6 +294,11 @@ export class SettingsController {
         this.applyThemeImmediate(value);
       }
       
+      // FIXED: Apply family name immediately if it's a family name setting
+      if (path === 'family.familyName') {
+        this.applyFamilyNameImmediate(value);
+      }
+      
       // Auto-save after a short delay (debounced)
       this.scheduleAutoSave();
       
@@ -267,6 +317,16 @@ export class SettingsController {
       console.log(`⚙️ 🎨 Theme applied immediately: ${theme}`);
     } catch (error) {
       console.warn('⚙️ ⚠️ Failed to apply theme immediately:', error);
+    }
+  }
+
+  // FIXED: Apply family name immediately when setting changes (mirrors theme)
+  async applyFamilyNameImmediate(familyName) {
+    try {
+      await this.applyFamilyNameToWidgets(familyName);
+      console.log(`⚙️ 👨‍👩‍👧‍👦 Family name applied immediately: ${familyName}`);
+    } catch (error) {
+      console.warn('⚙️ ⚠️ Failed to apply family name immediately:', error);
     }
   }
 
