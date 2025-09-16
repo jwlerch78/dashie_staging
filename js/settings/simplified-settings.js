@@ -1,5 +1,5 @@
 // js/settings/simplified-settings.js
-// Complete simplified settings system with enhanced event handling
+// Complete simplified settings system with enhanced event handling and fixed initialization
 
 export class SimplifiedSettings {
   constructor() {
@@ -9,33 +9,167 @@ export class SimplifiedSettings {
     this.controller = null;
     this.pendingChanges = {};
     this.keydownHandler = null;
+    this.initializationAttempts = 0;
+    this.maxInitAttempts = 10;
     
-    // Initialize storage controller
+    // Start initialization process
     this.initializeController();
   }
 
   async initializeController() {
     try {
-      // Use existing settings controller for data persistence
+      this.initializationAttempts++;
+      console.log(`Settings initialization attempt ${this.initializationAttempts}/${this.maxInitAttempts}`);
+      
+      // Check if auth is ready
+      const isAuthenticated = window.dashieAuth?.isAuthenticated();
+      const hasUser = window.dashieAuth?.getUser();
+      
+      console.log('Auth check:', {
+        dashieAuthExists: !!window.dashieAuth,
+        isAuthenticated: isAuthenticated,
+        hasUser: !!hasUser,
+        userEmail: hasUser?.email
+      });
+      
+      if (!isAuthenticated || !hasUser) {
+        if (this.initializationAttempts < this.maxInitAttempts) {
+          console.log('Auth not ready, retrying in 1 second...');
+          setTimeout(() => this.initializeController(), 1000);
+          return;
+        } else {
+          console.warn('Max initialization attempts reached, proceeding without auth');
+          // Proceed anyway - will use local storage only
+        }
+      }
+      
+      // Initialize the controller
       const { SettingsController } = await import('./settings-controller.js');
       this.controller = new SettingsController();
-      await this.controller.init();
-      console.log('📊 Settings controller initialized');
+      
+      if (isAuthenticated && hasUser) {
+        await this.controller.init();
+        console.log('Settings controller initialized with database support');
+      } else {
+        console.log('Settings controller initialized with local storage only');
+      }
+      
     } catch (error) {
-      console.error('Failed to initialize settings controller:', error);
+      console.error('Settings controller initialization failed:', error);
+      
+      // Create a fallback controller that only uses localStorage
+      this.controller = this.createFallbackController();
+      console.log('Using fallback localStorage-only controller');
     }
+  }
+
+  // Fallback controller for when database initialization fails
+  createFallbackController() {
+    return {
+      isInitialized: true,
+      currentSettings: this.getDefaultSettings(),
+      
+      getSetting(path) {
+        const keys = path.split('.');
+        let current = this.currentSettings;
+        for (const key of keys) {
+          if (current && typeof current === 'object' && key in current) {
+            current = current[key];
+          } else {
+            return undefined;
+          }
+        }
+        return current;
+      },
+      
+      setSetting(path, value) {
+        const keys = path.split('.');
+        let current = this.currentSettings;
+        for (let i = 0; i < keys.length - 1; i++) {
+          const key = keys[i];
+          if (!(key in current) || typeof current[key] !== 'object') {
+            current[key] = {};
+          }
+          current = current[key];
+        }
+        current[keys[keys.length - 1]] = value;
+        return true;
+      },
+      
+      async saveSettings() {
+        try {
+          localStorage.setItem('dashie-settings', JSON.stringify(this.currentSettings));
+          console.log('Saved to localStorage (fallback mode)');
+          return true;
+        } catch (error) {
+          console.error('Failed to save to localStorage:', error);
+          return false;
+        }
+      },
+      
+      getSettings() {
+        return { ...this.currentSettings };
+      },
+      
+      isReady() {
+        return true;
+      }
+    };
+  }
+
+  getDefaultSettings() {
+    const user = window.dashieAuth?.getUser();
+    return {
+      photos: { transitionTime: 5 },
+      display: {
+        sleepTime: '22:00',
+        wakeTime: '07:00',
+        reSleepDelay: 30,
+        theme: 'dark'
+      },
+      accounts: {
+        dashieAccount: user?.email || 'unknown@example.com',
+        connectedServices: [],
+        pinEnabled: false
+      },
+      family: {
+        familyName: '',
+        members: []
+      },
+      system: {
+        refreshInterval: 30,
+        developer: {
+          defaultEnvironment: 'prod',
+          autoRedirect: false
+        }
+      },
+      version: '2.0.0',
+      lastModified: Date.now()
+    };
   }
 
   // Main entry point - called from existing code
   async show() {
     if (this.isVisible) return;
     
+    // Ensure controller is initialized before showing
+    if (!this.controller) {
+      console.log('Controller not ready, attempting initialization...');
+      await this.initializeController();
+      
+      // If still no controller, show error
+      if (!this.controller) {
+        alert('Settings system not ready. Please try again in a moment.');
+        return;
+      }
+    }
+    
     this.createSettingsUI();
     await this.loadCurrentSettings();
     this.setupEventHandlers();
     this.showOverlay();
     
-    console.log('⚙️ Simplified settings shown');
+    console.log('Simplified settings shown');
   }
 
   hide() {
@@ -44,7 +178,7 @@ export class SimplifiedSettings {
     this.hideOverlay();
     this.cleanup();
     
-    console.log('⚙️ Simplified settings hidden');
+    console.log('Simplified settings hidden');
   }
 
   createSettingsUI() {
@@ -213,7 +347,7 @@ export class SimplifiedSettings {
     try {
       // Load all current settings
       const currentSettings = this.controller.getSettings();
-      console.log('📖 Loading current settings:', currentSettings);
+      console.log('Loading current settings:', currentSettings);
       
       // Populate form fields with current values
       this.populateFormFields(currentSettings);
@@ -255,7 +389,7 @@ export class SimplifiedSettings {
       photoTransition.value = settings.photos.transitionTime;
     }
 
-    console.log('📝 Form fields populated with current settings');
+    console.log('Form fields populated with current settings');
   }
 
   setupEventHandlers() {
@@ -274,7 +408,7 @@ export class SimplifiedSettings {
         return;
       }
 
-      console.log('🎮 Settings captured key:', event.key);
+      console.log('Settings captured key:', event.key);
       
       // Let the navigation handle it
       if (this.navigation.handleKeyPress(event)) {
@@ -322,19 +456,33 @@ export class SimplifiedSettings {
   async handleSave() {
     if (!this.controller) {
       console.error('No settings controller available');
-      return;
+      
+      // Try to initialize one more time
+      await this.initializeController();
+      
+      if (!this.controller) {
+        alert('Settings system not available. Changes cannot be saved.');
+        return;
+      }
     }
 
     try {
-      console.log('💾 Saving settings:', this.pendingChanges);
+      console.log('Saving settings:', this.pendingChanges);
       
-      // Apply all pending changes
+      // Apply all pending changes to the controller
       for (const [path, value] of Object.entries(this.pendingChanges)) {
-        this.controller.setSetting(path, value);
+        const success = this.controller.setSetting(path, value);
+        if (!success) {
+          console.warn(`Failed to set ${path} = ${value}`);
+        }
       }
       
       // Save to database/local storage
-      await this.controller.saveSettings();
+      const success = await this.controller.saveSettings();
+      
+      if (!success) {
+        throw new Error('Save operation returned false');
+      }
       
       // Apply theme to main dashboard if changed
       if (this.pendingChanges['display.theme']) {
@@ -344,11 +492,18 @@ export class SimplifiedSettings {
       // Notify other parts of the app
       this.notifySettingsChanged();
       
-      console.log('✅ Settings saved successfully');
+      console.log('Settings saved successfully');
       this.hide();
       
     } catch (error) {
-      console.error('❌ Failed to save settings:', error);
+      console.error('Failed to save settings:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        pendingChanges: this.pendingChanges,
+        controllerExists: !!this.controller,
+        controllerInitialized: this.controller?.isInitialized
+      });
       alert('Failed to save settings. Please try again.');
     }
   }
@@ -360,7 +515,7 @@ export class SimplifiedSettings {
       this.applyTheme(originalTheme);
     }
     
-    console.log('🚫 Settings cancelled');
+    console.log('Settings cancelled');
     this.hide();
   }
 
@@ -378,7 +533,7 @@ export class SimplifiedSettings {
       // Use existing theme system
       const { switchTheme } = await import('../core/theme.js');
       switchTheme(theme);
-      console.log(`🎨 Applied theme to main dashboard: ${theme}`);
+      console.log(`Applied theme to main dashboard: ${theme}`);
     } catch (error) {
       console.warn('Could not apply theme to main dashboard:', error);
     }
@@ -483,7 +638,7 @@ class SimplifiedNavigation {
     
     // Only include content elements, not tabs (tabs are handled separately)
     this.focusableElements = [...groupTitles, ...expandedControls, ...buttons];
-    console.log(`⚙️ Updated focusable elements: ${this.focusableElements.length} (${groupTitles.length} titles, ${expandedControls.length} controls, ${buttons.length} buttons)`);
+    console.log(`Updated focusable elements: ${this.focusableElements.length} (${groupTitles.length} titles, ${expandedControls.length} controls, ${buttons.length} buttons)`);
   }
 
   setupEventListeners() {
@@ -491,7 +646,7 @@ class SimplifiedNavigation {
     this.overlay.querySelectorAll('.tab-button:not(.disabled)').forEach(tab => {
       tab.addEventListener('click', (e) => {
         e.stopPropagation();
-        console.log('🖱️ Tab clicked:', tab.dataset.tab);
+        console.log('Tab clicked:', tab.dataset.tab);
         this.switchTab(tab.dataset.tab);
       });
     });
@@ -500,7 +655,7 @@ class SimplifiedNavigation {
     this.overlay.querySelectorAll('.group-title').forEach(title => {
       title.addEventListener('click', (e) => {
         e.stopPropagation();
-        console.log('🖱️ Group title clicked:', title.dataset.group);
+        console.log('Group title clicked:', title.dataset.group);
         this.toggleGroup(title.dataset.group);
       });
     });
@@ -508,7 +663,7 @@ class SimplifiedNavigation {
     // Form changes
     this.overlay.querySelectorAll('.form-control').forEach(control => {
       control.addEventListener('change', (e) => {
-        console.log('🖱️ Form control changed:', control.id, control.value);
+        console.log('Form control changed:', control.id, control.value);
         if (control.id === 'theme-select') {
           this.callbacks.onThemeChange(e.target.value);
         } else if (control.dataset.setting) {
@@ -526,7 +681,7 @@ class SimplifiedNavigation {
       saveBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
-        console.log('🖱️ Save button clicked');
+        console.log('Save button clicked');
         this.callbacks.onSave();
       });
     }
@@ -535,7 +690,7 @@ class SimplifiedNavigation {
       cancelBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
-        console.log('🖱️ Cancel button clicked');
+        console.log('Cancel button clicked');
         this.callbacks.onCancel();
       });
     }
@@ -547,7 +702,7 @@ class SimplifiedNavigation {
     const { key } = event;
     let handled = false;
 
-    console.log(`⚙️ 🎹 Settings navigation handling key: ${key}`);
+    console.log(`Settings navigation handling key: ${key}`);
 
     // Check if we're on tabs (special handling)
     if (this.isOnTabs()) {
@@ -608,9 +763,9 @@ class SimplifiedNavigation {
     }
 
     if (handled) {
-      console.log(`⚙️ ✅ Settings handled key: ${key}`);
+      console.log(`Settings handled key: ${key}`);
     } else {
-      console.log(`⚙️ ❌ Settings did not handle key: ${key}`);
+      console.log(`Settings did not handle key: ${key}`);
     }
 
     return handled;
@@ -669,7 +824,7 @@ class SimplifiedNavigation {
     this.focusIndex = 0;
     this.updateFocus();
     
-    console.log(`⚙️ 📑 Switched to tab: ${tabId}`);
+    console.log(`Switched to tab: ${tabId}`);
   }
 
   updateFocus() {
@@ -689,7 +844,7 @@ class SimplifiedNavigation {
       if (!current.classList.contains('group-title')) {
         current.classList.add('selected');
       }
-      console.log(`⚙️ 🎯 Focused on: ${current.tagName}${current.id ? '#' + current.id : ''}${current.dataset.group ? '[' + current.dataset.group + ']' : ''}`);
+      console.log(`Focused on: ${current.tagName}${current.id ? '#' + current.id : ''}${current.dataset.group ? '[' + current.dataset.group + ']' : ''}`);
     }
   }
 
@@ -713,7 +868,7 @@ class SimplifiedNavigation {
       } else {
         // For form controls, focus them so user can interact
         current.focus();
-        console.log(`⚙️ 🖱️ Focused form control: ${current.id}`);
+        console.log(`Focused form control: ${current.id}`);
       }
     }
   }
