@@ -1,4 +1,4 @@
-// js/settings/settings-simple-manager.js
+// js/settings/settings-simple-manager.js - FIXED: Database loading and widget communication queuing
 // Main orchestrator for simplified settings system
 
 import { buildSettingsUI, populateFormFields, applyTheme } from './settings-ui-builder.js';
@@ -16,8 +16,33 @@ export class SimplifiedSettings {
     this.initializationAttempts = 0;
     this.maxInitAttempts = 20;
     
+    // FIXED: Queue for widget requests that arrive before controller is ready
+    this.pendingWidgetRequests = [];
+    this.controllerReady = false;
+    
     // Start initialization process with delay
     setTimeout(() => this.initializeController(), 500);
+
+    // FIXED: Listen for widget requests for family name and queue them if needed
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'request-family-name') {
+        console.log('👨‍👩‍👧‍👦 Widget requesting family name:', event.data.widget);
+        
+        if (this.controllerReady && this.controller) {
+          // Controller is ready, respond immediately
+          this.sendFamilyNameToWidget(event.source);
+        } else {
+          // Controller not ready, queue the request
+          console.log('👨‍👩‍👧‍👦 ⏳ Controller not ready, queuing family name request');
+          this.pendingWidgetRequests.push({
+            type: 'family-name-request',
+            source: event.source,
+            widget: event.data.widget,
+            timestamp: Date.now()
+          });
+        }
+      }
+    });
   }
 
   async initializeController() {
@@ -50,11 +75,42 @@ export class SimplifiedSettings {
         console.warn('⚙️ ⚠️ Settings controller initialized with fallback mode');
       }
       
+      // FIXED: Mark controller as ready and process pending requests
+      this.controllerReady = true;
+      this.processPendingWidgetRequests();
+      
     } catch (error) {
       console.error('⚙️ ❌ Settings controller initialization failed:', error);
       this.controller = this.createFallbackController();
+      this.controllerReady = true;
+      this.processPendingWidgetRequests();
       console.log('⚙️ Using fallback localStorage-only controller');
     }
+  }
+
+  // FIXED: Process queued widget requests once controller is ready
+  processPendingWidgetRequests() {
+    if (this.pendingWidgetRequests.length === 0) {
+      console.log('👨‍👩‍👧‍👦 ✅ No pending widget requests to process');
+      return;
+    }
+    
+    console.log(`👨‍👩‍👧‍👦 🔄 Processing ${this.pendingWidgetRequests.length} pending widget requests`);
+    
+    // Process all pending requests
+    this.pendingWidgetRequests.forEach((request, index) => {
+      console.log(`👨‍👩‍👧‍👦 Processing request ${index + 1}: ${request.widget}`);
+      
+      if (request.type === 'family-name-request') {
+        // Add a small delay between requests to avoid overwhelming
+        setTimeout(() => {
+          this.sendFamilyNameToWidget(request.source);
+        }, index * 100);
+      }
+    });
+    
+    // Clear the queue
+    this.pendingWidgetRequests = [];
   }
 
   checkAuthStatus() {
@@ -158,6 +214,7 @@ export class SimplifiedSettings {
     };
   }
 
+  // FIXED: Default family name changed to just "Dashie"
   getDefaultSettings(userEmail = 'unknown@example.com') {
     return {
       photos: { transitionTime: 5 },
@@ -173,7 +230,7 @@ export class SimplifiedSettings {
         pinEnabled: false
       },
       family: {
-        familyName: 'The Dashie Family',
+        familyName: 'Dashie',  // FIXED: Changed from 'The Dashie Family' to just 'Dashie'
         members: []
       },
       system: {
@@ -335,7 +392,7 @@ export class SimplifiedSettings {
       });
     }
     
-    // NEW: Update header widget with family name
+    // FIXED: Update header widget with family name
     if (this.pendingChanges['family.familyName']) {
       const headerWidgets = document.querySelectorAll('iframe[src*="header.html"]');
       headerWidgets.forEach(iframe => {
@@ -366,6 +423,84 @@ export class SimplifiedSettings {
           }
         }
       });
+    }
+  }
+
+  // FIXED: Enhanced family name sending with better error handling and retries
+  sendFamilyNameToWidget(widgetWindow) {
+    if (!this.controller) {
+      console.warn('👨‍👩‍👧‍👦 ⚠️ No controller available to get family name');
+      
+      // FIXED: Try localStorage fallback immediately
+      this.sendFallbackFamilyName(widgetWindow);
+      return;
+    }
+
+    try {
+      // FIXED: Get current family name from settings with multiple attempts
+      let familyName = this.controller.getSetting('family.familyName');
+      
+      // If no family name found, try to refresh settings and try again
+      if (!familyName) {
+        console.log('👨‍👩‍👧‍👦 ⚠️ No family name in controller, trying to refresh...');
+        
+        // Try to get fresh settings
+        const allSettings = this.controller.getSettings();
+        familyName = allSettings?.family?.familyName;
+        
+        if (!familyName) {
+          console.log('👨‍👩‍👧‍👦 ⚠️ Still no family name, trying localStorage fallback...');
+          this.sendFallbackFamilyName(widgetWindow);
+          return;
+        }
+      }
+      
+      console.log('👨‍👩‍👧‍👦 📤 Sending family name to widget:', familyName);
+      
+      widgetWindow.postMessage({
+        type: 'family-name-response',
+        familyName: familyName
+      }, '*');
+      
+      console.log('👨‍👩‍👧‍👦 ✅ Family name sent successfully');
+      
+    } catch (error) {
+      console.error('👨‍👩‍👧‍👦 ❌ Failed to send family name:', error);
+      this.sendFallbackFamilyName(widgetWindow);
+    }
+  }
+
+  // FIXED: Fallback method to send family name from localStorage or default
+  sendFallbackFamilyName(widgetWindow) {
+    let fallbackName = 'Dashie'; // Default fallback
+    
+    try {
+      // Try localStorage first
+      const savedSettings = localStorage.getItem('dashie-settings');
+      if (savedSettings) {
+        const settings = JSON.parse(savedSettings);
+        const storedName = settings?.family?.familyName;
+        if (storedName) {
+          fallbackName = storedName;
+          console.log('👨‍👩‍👧‍👦 💾 Using family name from localStorage:', fallbackName);
+        }
+      }
+    } catch (error) {
+      console.warn('👨‍👩‍👧‍👦 ⚠️ localStorage fallback failed:', error);
+    }
+    
+    try {
+      console.log('👨‍👩‍👧‍👦 🏠 Sending fallback family name:', fallbackName);
+      
+      widgetWindow.postMessage({
+        type: 'family-name-response',
+        familyName: fallbackName
+      }, '*');
+      
+      console.log('👨‍👩‍👧‍👦 ✅ Fallback family name sent');
+      
+    } catch (fallbackError) {
+      console.error('👨‍👩‍👧‍👦 ❌ Failed to send fallback family name:', fallbackError);
     }
   }
 
