@@ -180,7 +180,7 @@ export class AuthManager {
     return this.googleAccessToken;
   }
 
-  // Google APIs initialization (unchanged)
+  // Google APIs initialization (simplified for Cognito)
   async initializeGoogleAPIs() {
     if (!this.googleAccessToken) {
       console.warn('🔐 ⚠️ No Google access token available for API initialization');
@@ -188,7 +188,8 @@ export class AuthManager {
     }
 
     try {
-      this.googleAPI = new GoogleAPIClient(this.googleAccessToken);
+      // Pass the auth manager to GoogleAPIClient instead of just the token
+      this.googleAPI = new GoogleAPIClient(this);
       const testResults = await this.googleAPI.testAccess();
       console.log('🌐 ✅ Google APIs initialized:', testResults);
       
