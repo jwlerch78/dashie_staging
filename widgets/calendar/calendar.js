@@ -42,13 +42,10 @@ class CalendarWidget {
   }
 
   setupEventListeners() {
-    // Existing navigation event listeners
     window.addEventListener('message', (event) => {
       if (event.data && event.data.action) {
         this.handleCommand(event.data.action);
       }
-      
-      // NEW: Handle centralized data service messages
       if (event.data && event.data.type) {
         this.handleDataServiceMessage(event.data);
       }
@@ -79,7 +76,6 @@ class CalendarWidget {
     });
   }
 
-  // NEW: Handle messages from centralized data service
   handleDataServiceMessage(data) {
     switch (data.type) {
       case 'calendar-data-ready':
@@ -99,50 +95,42 @@ class CalendarWidget {
     }
   }
 
-  // NEW: Request calendar data from centralized service
   requestCalendarData() {
     console.log('📅 📤 Requesting calendar data from centralized service...');
-    
     try {
       window.parent.postMessage({
         type: 'request-calendar-data',
         widget: 'calendar',
         timestamp: Date.now()
       }, '*');
-      
       this.updateConnectionStatus('connecting');
-      
     } catch (error) {
       console.error('📅 ❌ Failed to request calendar data:', error);
       this.updateConnectionStatus('error');
     }
   }
 
-  // NEW: Handle calendar data from centralized service
   handleCalendarData(data) {
     if (data.status === 'error') {
       console.error('📅 ❌ Calendar data error:', data.error);
       this.updateConnectionStatus('error');
       return;
     }
-    
-    // Update calendar data
+
     this.calendarData = {
       events: data.events || [],
       calendars: data.calendars || [],
       lastUpdated: data.lastUpdated
     };
-    
+
     this.isDataLoaded = true;
     this.updateConnectionStatus('connected');
-    
+
     console.log(`📅 ✅ Calendar data loaded: ${this.calendarData.events.length} events`);
-    
-    // Load events into TUI Calendar
+
     this.loadEventsIntoCalendar();
   }
 
-  // NEW: Load events from centralized data into TUI Calendar
   loadEventsIntoCalendar() {
     if (!this.calendar || !this.isDataLoaded) {
       console.log('📅 ⏳ Calendar not ready or no data loaded yet');
@@ -151,16 +139,14 @@ class CalendarWidget {
 
     // Clear existing events
     this.calendar.clear();
-    
-    // Convert centralized events to TUI Calendar format
+
     const tuiEvents = [];
-    
+
     this.calendarData.events.forEach((event, eventIndex) => {
       // Find matching calendar configuration
       let calendarConfig = null;
       let tuiCalendar = null;
-      
-      // Try to match by calendar name/summary
+
       for (let i = 0; i < this.GOOGLE_CALENDARS.length; i++) {
         if (event.calendarName === this.GOOGLE_CALENDARS[i].summary) {
           calendarConfig = this.GOOGLE_CALENDARS[i];
@@ -168,31 +154,41 @@ class CalendarWidget {
           break;
         }
       }
-      
-      // Fallback to first calendar if no match found
+
       if (!calendarConfig) {
         calendarConfig = this.GOOGLE_CALENDARS[0];
         tuiCalendar = this.tuiCalendars[0];
       }
-      
+
+      // Determine if the event should be all-day
+      const start = new Date(event.startDateTime);
+      let end = new Date(event.endDateTime);
+
+      let isAllDay = event.isAllDay || false;
+
+      // New logic: same hour, different day → mark as all-day
+      if (!isAllDay && start.getHours() === end.getHours() && start.toDateString() !== end.toDateString()) {
+        isAllDay = true;
+        // Adjust end date for TUI Calendar
+        end = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+      }
+
       const tuiEvent = {
         id: `event-${eventIndex}`,
         calendarId: tuiCalendar.id,
         title: event.summary || '(No title)',
-        start: new Date(event.startDateTime),
-        end: new Date(event.endDateTime),
-        category: event.isAllDay ? 'allday' : 'time',
+        start: start,
+        end: end,
+        category: isAllDay ? 'allday' : 'time',
         backgroundColor: tuiCalendar.backgroundColor,
         borderColor: tuiCalendar.borderColor,
         color: tuiCalendar.color,
-        // Store original event data for reference
         raw: event
       };
-      
+
       tuiEvents.push(tuiEvent);
     });
-    
-    // Add events to calendar
+
     if (tuiEvents.length > 0) {
       this.calendar.createEvents(tuiEvents);
       console.log(`📅 ✅ Loaded ${tuiEvents.length} events into TUI Calendar`);
@@ -201,11 +197,8 @@ class CalendarWidget {
     }
   }
 
-  // NEW: Update connection status
   updateConnectionStatus(status) {
     this.connectionStatus = status;
-    
-    // Update status indicator if it exists
     const statusEl = document.querySelector('.status');
     if (statusEl) {
       switch (status) {
@@ -230,7 +223,6 @@ class CalendarWidget {
       const monday = this.getStartOfWeek(this.currentDate);
       this.currentDate = monday;
 
-      // Initialize TUI Calendar with proper configuration
       this.calendar = new tui.Calendar('#calendar', {
         defaultView: this.currentView,
         useCreationPopup: false,
@@ -244,7 +236,7 @@ class CalendarWidget {
           hourStart: 6,
           hourEnd: 24,
           showNowIndicator: true,
-          eventView: ['time'],
+          eventView: ['time', 'allday'],
           taskView: false
         },
         month: {
@@ -267,11 +259,9 @@ class CalendarWidget {
       this.showCalendar();
       this.updateCalendarHeader();
 
-      // NEW: Request calendar data from centralized service instead of direct API calls
       console.log('📅 Requesting calendar data from centralized service...');
       this.requestCalendarData();
 
-      // Optional: scroll to 8am
       setTimeout(() => this.scrollToTime(8), 200);
 
       console.log('📅 TUI Calendar initialized in', this.currentView, 'view');
@@ -324,8 +314,7 @@ class CalendarWidget {
         this.scrollCalendar('up'); 
         break;
       case 'down': 
-        // NEW: Down key refreshes calendar data
-        this.requestCalendarData();
+        this.scrollCalendar('down'); 
         break;
       case 'enter': 
         console.log('📅 Enter pressed on calendar widget'); 
@@ -410,22 +399,15 @@ class CalendarWidget {
     this.changeView(this.viewCycle[newIndex]);
   }
 
-  // NEW: Apply theme (replaces old theme application)
   applyTheme(theme) {
     const themeClass = `theme-${theme}`;
-    
-    // Remove existing theme classes
     document.documentElement.classList.remove('theme-dark', 'theme-light');
     document.body.classList.remove('theme-dark', 'theme-light');
-    
-    // Add new theme class
     document.documentElement.classList.add(themeClass);
     document.body.classList.add(themeClass);
-    
     console.log(`📅 Applied ${theme} theme to TUI Calendar`);
   }
 
-  // NEW: Request theme from parent
   requestTheme() {
     try {
       window.parent.postMessage({
@@ -436,15 +418,9 @@ class CalendarWidget {
       console.log('📅 Could not request theme');
     }
   }
-
-  // REMOVED: Old loadGoogleCalendarData method - now using centralized service
-  // The centralized service handles all Google API calls and data management
 }
 
-// Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   const calendarWidget = new CalendarWidget();
-  
-  // Request theme after short delay
   setTimeout(() => calendarWidget.requestTheme(), 500);
 });

@@ -1,4 +1,4 @@
-// js/settings/settings-ui-builder.js - FIXED: Enable System tab with site selection
+// js/settings/settings-ui-builder.js - FIXED: Updated System tab with Auto Redirect structure
 // HTML generation and form population for settings interface
 
 export function buildSettingsUI() {
@@ -157,15 +157,27 @@ export function buildSettingsUI() {
         <!-- System Tab -->
         <div class="tab-panel" id="system-panel">
           <div class="settings-group">
-            <h3 class="group-title" data-group="active-site">
-              <span>Active Dashie Site</span>
+            <h3 class="group-title" data-group="auto-redirect">
+              <span>Auto Redirect</span>
               <span class="expand-arrow">▶</span>
             </h3>
-            <div class="group-content collapsed" id="active-site-content">
+            <div class="group-content collapsed" id="auto-redirect-content">
               <div class="setting-row">
                 <div class="setting-label">
-                  Current Site
-                  <div class="setting-description">Switch between production and development sites</div>
+                  Auto Redirect
+                  <div class="setting-description">Auto redirect can be overridden by adding "/?noredirect=true" to the url.</div>
+                </div>
+                <div class="setting-control">
+                  <select class="form-control" id="auto-redirect-select" data-setting="system.autoRedirect">
+                    <option value="false">Disabled</option>
+                    <option value="true">Enabled</option>
+                  </select>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label">
+                  Redirect Site
+                  <div class="setting-description">Which site to redirect to when auto redirect is enabled</div>
                 </div>
                 <div class="setting-control">
                   <select class="form-control" id="active-site-select" data-setting="system.activeSite">
@@ -176,8 +188,8 @@ export function buildSettingsUI() {
               </div>
               <div class="setting-row">
                 <div class="setting-label">
-                  Current URL
-                  <div class="setting-description" id="current-url-display">Loading...</div>
+                  Current Site
+                  <div class="setting-description">The site you are currently on</div>
                 </div>
                 <div class="setting-control">
                   <span class="current-site-indicator" id="current-site-indicator">Detecting...</span>
@@ -192,19 +204,6 @@ export function buildSettingsUI() {
               <span class="expand-arrow">▶</span>
             </h3>
             <div class="group-content collapsed" id="developer-content">
-              <div class="setting-row">
-                <div class="setting-label">
-                  Auto Redirect
-                  <div class="setting-description">Automatically redirect on startup if site doesn't match setting</div>
-                </div>
-                <div class="setting-control">
-                  <select class="form-control" id="auto-redirect-select" data-setting="system.autoRedirect">
-                    <option value="true">Enabled</option>
-                    <option value="false">Disabled</option>
-                  </select>
-                </div>
-              </div>
-              
               <div class="setting-row">
                 <div class="setting-label">
                   Debug Mode
@@ -245,94 +244,78 @@ export function populateFormFields(overlay, settings) {
   const themeSelect = overlay.querySelector('#theme-select');
   if (themeSelect && settings.display?.theme) {
     themeSelect.value = settings.display.theme;
-    console.log('⚙️ Set theme to:', settings.display.theme);
   }
 
   // Sleep settings  
   const sleepTime = overlay.querySelector('#sleep-time');
   if (sleepTime && settings.display?.sleepTime) {
     sleepTime.value = settings.display.sleepTime;
-    console.log('⚙️ Set sleep time to:', settings.display.sleepTime);
   }
 
   const wakeTime = overlay.querySelector('#wake-time');
   if (wakeTime && settings.display?.wakeTime) {
     wakeTime.value = settings.display.wakeTime;
-    console.log('⚙️ Set wake time to:', settings.display.wakeTime);
   }
 
   const resleepDelay = overlay.querySelector('#resleep-delay');
   if (resleepDelay && settings.display?.reSleepDelay) {
     resleepDelay.value = settings.display.reSleepDelay;
-    console.log('⚙️ Set resleep delay to:', settings.display.reSleepDelay);
   }
 
   // Photos
   const photoTransition = overlay.querySelector('#photo-transition');
   if (photoTransition && settings.photos?.transitionTime) {
     photoTransition.value = settings.photos.transitionTime;
-    console.log('⚙️ Set photo transition to:', settings.photos.transitionTime);
   }
 
-  // Family settings - populate the family name field
+  // Family settings
   const familyName = overlay.querySelector('#family-name');
   if (familyName) {
-    // Set the value if it exists, otherwise use default
     const nameValue = settings.family?.familyName || 'Dashie';
     familyName.value = nameValue;
-    console.log('⚙️ Set family name to:', nameValue);
   }
 
-  // NEW: System settings
+  // System settings
   const activeSiteSelect = overlay.querySelector('#active-site-select');
   if (activeSiteSelect && settings.system?.activeSite) {
     activeSiteSelect.value = settings.system.activeSite;
-    console.log('⚙️ Set active site to:', settings.system.activeSite);
   }
 
   const autoRedirectSelect = overlay.querySelector('#auto-redirect-select');
   if (autoRedirectSelect && settings.system?.autoRedirect !== undefined) {
     autoRedirectSelect.value = settings.system.autoRedirect.toString();
-    console.log('⚙️ Set auto redirect to:', settings.system.autoRedirect);
   }
 
   const debugModeSelect = overlay.querySelector('#debug-mode-select');
   if (debugModeSelect && settings.system?.debugMode !== undefined) {
     debugModeSelect.value = settings.system.debugMode.toString();
-    console.log('⚙️ Set debug mode to:', settings.system.debugMode);
   }
 
-  // NEW: Update current site indicator
+  // Update current site indicator
   updateCurrentSiteIndicator(overlay);
-
-  console.log('⚙️ ✅ Form fields populated successfully');
 }
 
-// NEW: Function to update current site indicator
+// Function to update current site indicator
 function updateCurrentSiteIndicator(overlay) {
-  const currentUrlDisplay = overlay.querySelector('#current-url-display');
   const currentSiteIndicator = overlay.querySelector('#current-site-indicator');
   
-  if (currentUrlDisplay && currentSiteIndicator) {
-    const currentUrl = window.location.href;
+  if (currentSiteIndicator) {
     const currentSite = detectCurrentSite();
     
-    currentUrlDisplay.textContent = currentUrl;
-    
     if (currentSite === 'prod') {
-      currentSiteIndicator.textContent = 'Production';
+      currentSiteIndicator.textContent = 'Production (dashieapp.com)';
       currentSiteIndicator.style.color = '#51cf66'; // Green
     } else if (currentSite === 'dev') {
-      currentSiteIndicator.textContent = 'Development';
+      currentSiteIndicator.textContent = 'Development (dev.dashieapp.com)';
       currentSiteIndicator.style.color = '#ffd43b'; // Yellow
     } else {
-      currentSiteIndicator.textContent = 'Other';
+      currentSiteIndicator.textContent = `Other (${window.location.hostname})`;
       currentSiteIndicator.style.color = '#9e9e9e'; // Gray
     }
   }
 }
 
-// NEW: Function to detect current site
+// Function to detect current site
 function detectCurrentSite() {
   const hostname = window.location.hostname;
   
@@ -346,8 +329,6 @@ function detectCurrentSite() {
 }
 
 export function applyTheme(overlay, theme) {
-  console.log(`⚙️ 🎨 Applying theme: ${theme}`);
-  
   // Apply theme to settings modal
   document.body.className = document.body.className.replace(/theme-\w+/g, '') + ` theme-${theme}`;
   
@@ -356,8 +337,6 @@ export function applyTheme(overlay, theme) {
     overlay.classList.remove('theme-dark', 'theme-light');
     overlay.classList.add(`theme-${theme}`);
   }
-  
-  console.log(`⚙️ ✅ Theme applied: ${theme}`);
 }
 
 // Export helper functions
