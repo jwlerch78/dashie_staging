@@ -1,4 +1,6 @@
-// js/main.js - App Initialization & Orchestration (Fixed to eliminate duplicate auth)
+// js/main.js - App Initialization & Orchestration (Fixed export and import issues)
+// CHANGE SUMMARY: Fixed export issues, eliminated duplicate auth, added proper imports
+
 import { initializeEvents } from './core/events.js';
 import { updateFocus, initializeHighlightTimeout } from './core/navigation.js';
 import { renderGrid, renderSidebar } from './ui/grid.js';
@@ -56,7 +58,7 @@ function checkAuthReady() {
 // ---------------------
 // APP INITIALIZATION
 // ---------------------
-async function initializeApp() {
+export async function initializeApp() {
   console.log("Initializing Dashie Dashboard...");
   
   // Wait for auth system to be ready (created by simple-auth.js)
