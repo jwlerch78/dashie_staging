@@ -1,5 +1,5 @@
 // js/auth/auth-manager.js
-// UPDATED: Simplified auth manager using AWS Cognito instead of platform-specific flows
+// CHANGE SUMMARY: Dramatically simplified for Cognito - removed platform detection, custom OAuth flows, and complex token management
 
 import { CognitoAuth } from './cognito-auth.js';
 import { AuthUI } from './auth-ui.js';
@@ -180,7 +180,33 @@ export class AuthManager {
     return this.googleAccessToken;
   }
 
-  // Google APIs initialization (simplified for Cognito)
+  // NEW: Method for token refresh (uses Cognito's built-in refresh)
+  async refreshGoogleAccessToken() {
+    try {
+      console.log('🔄 Refreshing Google access token via Cognito...');
+      const success = await this.cognitoAuth.refreshSession();
+      
+      if (success && this.cognitoAuth.getGoogleAccessToken()) {
+        this.googleAccessToken = this.cognitoAuth.getGoogleAccessToken();
+        
+        // Update current user object
+        if (this.currentUser) {
+          this.currentUser.googleAccessToken = this.googleAccessToken;
+          this.storage.saveUser(this.currentUser);
+        }
+        
+        console.log('🔄 ✅ Google access token refreshed successfully');
+        return this.googleAccessToken;
+      } else {
+        throw new Error('Cognito session refresh failed');
+      }
+    } catch (error) {
+      console.error('🔄 ❌ Google access token refresh failed:', error);
+      throw error;
+    }
+  }
+
+  // Google APIs initialization (updated for Cognito)
   async initializeGoogleAPIs() {
     if (!this.googleAccessToken) {
       console.warn('🔐 ⚠️ No Google access token available for API initialization');
@@ -188,7 +214,7 @@ export class AuthManager {
     }
 
     try {
-      // Pass the auth manager to GoogleAPIClient instead of just the token
+      // Pass 'this' as the auth manager so GoogleAPIClient can call refreshGoogleAccessToken
       this.googleAPI = new GoogleAPIClient(this);
       const testResults = await this.googleAPI.testAccess();
       console.log('🌐 ✅ Google APIs initialized:', testResults);

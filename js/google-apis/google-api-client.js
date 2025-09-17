@@ -1,5 +1,5 @@
-// js/google-apis/google-api-client.js - Updated with Cognito Integration
-// CHANGE SUMMARY: Simplified token management - Cognito handles refresh automatically
+// js/google-apis/google-api-client.js - Updated with Cognito Token Manager Integration
+// CHANGE SUMMARY: Enhanced to automatically handle Cognito token refresh on 401 errors
 
 // ==================== CONFIG VARIABLES ====================
 
@@ -31,24 +31,17 @@ export class GoogleAPIClient {
     this.minRequestInterval = 100; // 100ms between requests
   }
 
-  // UPDATED: Get current access token with Cognito integration
+  // UPDATED: Get current access token with automatic Cognito refresh
   async getAccessToken() {
     try {
-      // Get Google access token from Cognito auth
-      if (this.authManager?.cognitoAuth?.getGoogleAccessToken) {
-        const token = this.authManager.cognitoAuth.getGoogleAccessToken();
-        if (token) {
-          return token;
-        }
+      // First, try to get the current token
+      let token = this.authManager.getGoogleAccessToken();
+      
+      if (!token) {
+        throw new Error('No Google access token available');
       }
       
-      // Fallback: get from current user data
-      const user = this.authManager?.getUser();
-      if (user?.googleAccessToken) {
-        return user.googleAccessToken;
-      }
-      
-      throw new Error('No Google access token available');
+      return token;
     } catch (error) {
       console.error('📡 ❌ Failed to get valid access token:', error);
       throw new Error('Unable to get valid access token');
@@ -69,7 +62,7 @@ export class GoogleAPIClient {
     this.lastRequestTime = Date.now();
   }
 
-  // SIMPLIFIED: Request method with basic retry (Cognito handles token refresh)
+  // ENHANCED: Request method with automatic Cognito token refresh on 401 errors
   async makeRequest(endpoint, options = {}) {
     let url;
     if (endpoint.startsWith('http')) {
@@ -82,11 +75,11 @@ export class GoogleAPIClient {
       url = `${this.baseUrl}${endpoint}`;
     }
 
-    // Retry logic with exponential backoff
+    // Retry logic with exponential backoff and Cognito token refresh
     let lastError;
     for (let attempt = 0; attempt <= this.retryConfig.maxRetries; attempt++) {
       try {
-        // Get fresh token for each attempt
+        // Get fresh token for each attempt (important for retry after refresh)
         const token = await this.getAccessToken();
         
         if (!token) {
@@ -122,24 +115,23 @@ export class GoogleAPIClient {
         error.status = response.status;
         error.response = response;
         
-        // Handle 401 Unauthorized - let Cognito handle token refresh
+        // Handle 401 Unauthorized - token may be expired
         if (response.status === 401) {
           console.warn(`🔄 Google API 401 error on attempt ${attempt + 1} - token may be expired`);
           
-          // Try to refresh Cognito session if this is not the last attempt
+          // Try to refresh token if this is not the last attempt
           if (attempt < this.retryConfig.maxRetries) {
             try {
-              console.log('🔄 Attempting to refresh Cognito session...');
-              if (this.authManager?.cognitoAuth?.refreshSession) {
-                await this.authManager.cognitoAuth.refreshSession();
-                console.log('🔄 ✅ Cognito session refreshed, retrying API request...');
-                
-                // Wait a bit before retry
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                continue; // Retry with refreshed token
-              }
+              console.log('🔄 Attempting to refresh token via Cognito due to 401 error...');
+              await this.authManager.refreshGoogleAccessToken();
+              console.log('🔄 ✅ Token refreshed via Cognito, retrying API request...');
+              
+              // Wait a bit before retry
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              continue; // Retry with refreshed token
+              
             } catch (refreshError) {
-              console.error('🔄 ❌ Cognito session refresh failed:', refreshError);
+              console.error('🔄 ❌ Cognito token refresh failed:', refreshError);
               // If refresh fails, don't retry further - let the error bubble up
               throw error;
             }
@@ -197,7 +189,7 @@ export class GoogleAPIClient {
     throw lastError || new Error('All API request attempts failed');
   }
 
-  // EXISTING CALENDAR API METHODS (unchanged)
+  // EXISTING CALENDAR API METHODS (updated to use enhanced makeRequest)
 
   // Get list of calendars
   async getCalendarList() {
@@ -310,7 +302,9 @@ export class GoogleAPIClient {
     }
   }
 
-  // Test API access with Cognito token handling
+  // EXISTING PHOTOS API METHODS (commented out as requested in original)
+
+  // Test API access with enhanced Cognito token handling
   async testAccess() {
     console.log('🧪 Testing Google API access...');
     

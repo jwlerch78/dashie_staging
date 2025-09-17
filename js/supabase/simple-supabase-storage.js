@@ -1,11 +1,11 @@
 // js/supabase/simple-supabase-storage.js
 // UPDATED: Modified to work with Cognito JWT tokens instead of custom Edge Function
 
-import { supabaseClient } from './supabase-config.js';
+import { supabase } from './supabase-config.js';
 
 export class SimpleSupabaseStorage {
   constructor() {
-    this.supabase = supabaseClient;
+    this.supabase = supabase;
     this.isRLSMode = false;
     this.currentUser = null;
     this.fallbackStorage = {};
@@ -428,5 +428,16 @@ export class SimpleSupabaseStorage {
     // Realtime subscription setup would need to be updated for Cognito
     // This is a placeholder - the exact implementation depends on your Supabase RLS policies
     console.log('🔄 Realtime subscriptions setup (placeholder for Cognito integration)');
+  }
+
+  // Compatibility method for existing settings system
+  subscribeToChanges(callback) {
+    // Placeholder for real-time subscription
+    console.log('🔄 Settings change subscription setup');
+    return () => console.log('🔄 Unsubscribed from settings changes');
+  }
+
+  unsubscribeAll() {
+    console.log('🔄 Unsubscribed from all changes');
   }
 }
