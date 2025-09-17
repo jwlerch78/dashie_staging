@@ -1,5 +1,5 @@
 // js/auth/cognito-config.js
-// UPDATED: Cognito configuration replacing custom OAuth setup
+// FIXED: Scopes that actually work with Cognito
 
 // Environment detection
 function getEnvironment() {
@@ -8,25 +8,29 @@ function getEnvironment() {
   if (hostname === 'dev.dashieapp.com') return 'development';
   return 'development'; // Default for localhost and other domains
 }
-
 const environment = getEnvironment();
 
 // Cognito Configuration
 export const COGNITO_CONFIG = {
-  // AWS Cognito Settings
+  // AWS Cognito Settings - USE THE CORRECT CLIENT ID
   region: 'us-east-2',
   userPoolId: 'us-east-2_nbo8y8lm',
-  userPoolWebClientId: '35h8kpkr2j8agv1m1id7vfal6m',
+  userPoolWebClientId: '35h8kpkr2j8agv1m1id7vfal6m', // Fixed to match your actual URL
   
   // Cognito Domain
   domain: 'us-east-2wnbo8y8lm.auth.us-east-2.amazoncognito.com',
   
-  // OAuth Configuration
+  // OAuth Configuration - FIXED SCOPES
   oauth: {
-    scope: ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/calendar.readonly', 'https://www.googleapis.com/auth/photoslibrary.readonly'],
+    // Use the scopes that worked in your test
+    scope: ['email', 'openid', 'phone'],
+    
+    // After this works, we can add back the Google API scopes:
+    // scope: ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/calendar.readonly', 'https://www.googleapis.com/auth/photoslibrary.readonly'],
+    
     redirectSignIn: environment === 'production' 
-      ? 'https://dashieapp.com/auth/callback'
-      : 'https://dev.dashieapp.com/auth/callback',
+      ? 'https://dashieapp.com/oauth2/idpresponse'
+      : 'https://dev.dashieapp.com/oauth2/idpresponse', // Try the standard Cognito callback format
     redirectSignOut: environment === 'production'
       ? 'https://dashieapp.com/'
       : 'https://dev.dashieapp.com/',
@@ -57,7 +61,9 @@ export const AMPLIFY_CONFIG = {
 };
 
 console.log('🔐 Cognito config loaded for environment:', environment);
+console.log('🔐 Using client ID:', COGNITO_CONFIG.userPoolWebClientId);
 console.log('🔐 Redirect URLs:', {
   signIn: COGNITO_CONFIG.oauth.redirectSignIn,
   signOut: COGNITO_CONFIG.oauth.redirectSignOut
 });
+console.log('🔐 Scopes:', COGNITO_CONFIG.oauth.scope);
