@@ -1,5 +1,5 @@
-// js/auth/auth-manager.js - Fixed to broadcast postMessage to ALL widgets with enhanced debugging
-// FIXED: Broadcasts google-apis-ready to all widgets, not just calendar + enhanced debugging
+// js/auth/auth-manager.js - UPDATED: Centralized data service that fetches and distributes actual data to widgets
+// Added centralized data fetching, caching, and distribution system
 
 import { NativeAuth } from './native-auth.js';
 import { WebAuth } from './web-auth.js';
@@ -25,8 +25,29 @@ export class AuthManager {
     
     this.nativeAuthFailed = false;
 
-    this.googleAccessToken = null; // Store the Google access token for RLS authentication with Supabase
+    this.googleAccessToken = null;
     this.googleAPI = null;
+    
+    // NEW: Centralized data cache and refresh system
+    this.dataCache = {
+      calendar: {
+        events: [],
+        calendars: [],
+        lastUpdated: null,
+        refreshInterval: 5 * 60 * 1000, // 5 minutes
+        isLoading: false
+      },
+      photos: {
+        albums: [],
+        recentPhotos: [],
+        lastUpdated: null,
+        refreshInterval: 30 * 60 * 1000, // 30 minutes
+        isLoading: false
+      }
+    };
+    
+    this.refreshTimers = {};
+    this.pendingWidgetRequests = [];
     
     this.init();
   }
@@ -76,16 +97,16 @@ export class AuthManager {
     window.handleNativeAuth = (result) => this.handleNativeAuthResult(result);
     window.handleWebAuth = (result) => this.handleWebAuthResult(result);
     
+    // NEW: Set up widget request handler
+    this.setupWidgetRequestHandler();
+    
     // Check for existing authentication first
     this.checkExistingAuth();
     
     // If already signed in, we're done
     if (this.isSignedIn) {
-      console.log('🔐 ✅ Already authenticated, skipping auth initialization');
-      
-      // CRITICAL FIX: Initialize Google APIs for restored users
+      console.log('🔐 ✅ Already authenticated, initializing data services');
       await this.initializeGoogleAPIs();
-      
       return;
     }
 
@@ -104,13 +125,11 @@ export class AuthManager {
       try {
         await this.webAuth.init();
         
-        // CRITICAL FIX: Check if OAuth callback was handled during init
         if (this.isSignedIn) {
           console.log('🔐 ✅ OAuth callback handled during init, user is now signed in');
-          return; // Don't show sign-in prompt if we're already authenticated
+          return;
         }
         
-        // Only show sign-in prompt if we're still not signed in
         console.log('🔐 No existing auth found, showing sign-in prompt');
         this.ui.showSignInPrompt(() => this.signIn(), () => this.exitApp());
         
@@ -128,12 +147,9 @@ export class AuthManager {
       this.currentUser = savedUser;
       this.isSignedIn = true;
       
-      // CRITICAL FIX: Restore the Google access token from saved user data
       if (savedUser.googleAccessToken) {
         this.googleAccessToken = savedUser.googleAccessToken;
         console.log('🔐 ✅ Restored Google access token from saved user');
-        console.log('🔐 Token length:', savedUser.googleAccessToken.length);
-        console.log('🔐 Token preview:', savedUser.googleAccessToken.substring(0, 30) + '...');
       } else {
         console.warn('🔐 ⚠️ No Google access token in saved user data');
       }
@@ -142,7 +158,292 @@ export class AuthManager {
     }
   }
 
-  // NEW: Initialize Google APIs (for both new and restored users)
+  // NEW: Widget request handler for centralized data
+  setupWidgetRequestHandler() {
+    window.addEventListener('message', (event) => {
+      if (!event.data || !event.data.type) return;
+      
+      switch (event.data.type) {
+        case 'request-calendar-data':
+          console.log('📅 Widget requesting calendar data:', event.data.widget);
+          this.handleCalendarDataRequest(event.source, event.data);
+          break;
+          
+        case 'request-photos-data':
+          console.log('📸 Widget requesting photos data:', event.data.widget);
+          this.handlePhotosDataRequest(event.source, event.data);
+          break;
+          
+        case 'refresh-calendar-data':
+          console.log('📅 Widget requesting calendar refresh:', event.data.widget);
+          this.refreshCalendarData(true);
+          break;
+          
+        case 'refresh-photos-data':
+          console.log('📸 Widget requesting photos refresh:', event.data.widget);
+          this.refreshPhotosData(true);
+          break;
+      }
+    });
+  }
+
+  // NEW: Handle calendar data requests
+  async handleCalendarDataRequest(widgetWindow, requestData) {
+    const cacheData = this.dataCache.calendar;
+    
+    // Check if we have fresh data
+    const now = Date.now();
+    const isDataFresh = cacheData.lastUpdated && 
+                       (now - cacheData.lastUpdated) < cacheData.refreshInterval;
+    
+    if (isDataFresh && cacheData.events.length > 0) {
+      console.log('📅 Sending cached calendar data to widget');
+      this.sendCalendarDataToWidget(widgetWindow, cacheData);
+      return;
+    }
+    
+    // If data is stale or missing, queue the request and fetch fresh data
+    this.pendingWidgetRequests.push({
+      type: 'calendar',
+      window: widgetWindow,
+      requestData: requestData,
+      timestamp: now
+    });
+    
+    await this.refreshCalendarData();
+  }
+
+  // NEW: Handle photos data requests
+  async handlePhotosDataRequest(widgetWindow, requestData) {
+    const cacheData = this.dataCache.photos;
+    
+    // Check if we have fresh data
+    const now = Date.now();
+    const isDataFresh = cacheData.lastUpdated && 
+                       (now - cacheData.lastUpdated) < cacheData.refreshInterval;
+    
+    if (isDataFresh && (cacheData.albums.length > 0 || cacheData.recentPhotos.length > 0)) {
+      console.log('📸 Sending cached photos data to widget');
+      this.sendPhotosDataToWidget(widgetWindow, cacheData);
+      return;
+    }
+    
+    // If data is stale or missing, queue the request and fetch fresh data
+    this.pendingWidgetRequests.push({
+      type: 'photos',
+      window: widgetWindow,
+      requestData: requestData,
+      timestamp: now
+    });
+    
+    await this.refreshPhotosData();
+  }
+
+  // NEW: Refresh calendar data
+  async refreshCalendarData(forceRefresh = false) {
+    if (!this.googleAPI) {
+      console.warn('📅 ❌ No Google API client available for calendar refresh');
+      return;
+    }
+    
+    const cacheData = this.dataCache.calendar;
+    
+    // Prevent multiple simultaneous refreshes
+    if (cacheData.isLoading && !forceRefresh) {
+      console.log('📅 Calendar refresh already in progress');
+      return;
+    }
+    
+    cacheData.isLoading = true;
+    console.log('📅 🔄 Refreshing calendar data...');
+    
+    try {
+      const calendarData = await this.googleAPI.getAllCalendarEvents();
+      
+      // Update cache
+      cacheData.events = calendarData.events || [];
+      cacheData.calendars = calendarData.calendars || [];
+      cacheData.lastUpdated = Date.now();
+      cacheData.isLoading = false;
+      
+      console.log(`📅 ✅ Calendar data refreshed: ${cacheData.events.length} events, ${cacheData.calendars.length} calendars`);
+      
+      // Send data to pending widgets
+      this.processPendingRequests('calendar');
+      
+      // Set up auto-refresh
+      this.scheduleDataRefresh('calendar');
+      
+    } catch (error) {
+      console.error('📅 ❌ Calendar data refresh failed:', error);
+      cacheData.isLoading = false;
+      
+      // Send error to pending widgets
+      this.sendErrorToPendingWidgets('calendar', error.message);
+    }
+  }
+
+  // NEW: Refresh photos data
+  async refreshPhotosData(forceRefresh = false) {
+    if (!this.googleAPI) {
+      console.warn('📸 ❌ No Google API client available for photos refresh');
+      return;
+    }
+    
+    const cacheData = this.dataCache.photos;
+    
+    // Prevent multiple simultaneous refreshes
+    if (cacheData.isLoading && !forceRefresh) {
+      console.log('📸 Photos refresh already in progress');
+      return;
+    }
+    
+    cacheData.isLoading = true;
+    console.log('📸 🔄 Refreshing photos data...');
+    
+    try {
+      // Fetch both albums and recent photos
+      const [albums, recentPhotos] = await Promise.all([
+        this.googleAPI.getPhotoAlbums(),
+        this.googleAPI.getRecentPhotos(50)
+      ]);
+      
+      // Update cache
+      cacheData.albums = albums || [];
+      cacheData.recentPhotos = recentPhotos.photos || [];
+      cacheData.lastUpdated = Date.now();
+      cacheData.isLoading = false;
+      
+      console.log(`📸 ✅ Photos data refreshed: ${cacheData.albums.length} albums, ${cacheData.recentPhotos.length} recent photos`);
+      
+      // Send data to pending widgets
+      this.processPendingRequests('photos');
+      
+      // Set up auto-refresh
+      this.scheduleDataRefresh('photos');
+      
+    } catch (error) {
+      console.error('📸 ❌ Photos data refresh failed:', error);
+      cacheData.isLoading = false;
+      
+      // Send error to pending widgets
+      this.sendErrorToPendingWidgets('photos', error.message);
+    }
+  }
+
+  // NEW: Process pending widget requests
+  processPendingRequests(dataType) {
+    const pendingRequests = this.pendingWidgetRequests.filter(req => req.type === dataType);
+    
+    if (pendingRequests.length === 0) return;
+    
+    console.log(`📊 Processing ${pendingRequests.length} pending ${dataType} requests`);
+    
+    pendingRequests.forEach(request => {
+      if (dataType === 'calendar') {
+        this.sendCalendarDataToWidget(request.window, this.dataCache.calendar);
+      } else if (dataType === 'photos') {
+        this.sendPhotosDataToWidget(request.window, this.dataCache.photos);
+      }
+    });
+    
+    // Remove processed requests
+    this.pendingWidgetRequests = this.pendingWidgetRequests.filter(req => req.type !== dataType);
+  }
+
+  // NEW: Send calendar data to widget
+  sendCalendarDataToWidget(widgetWindow, cacheData) {
+    if (!widgetWindow) return;
+    
+    try {
+      widgetWindow.postMessage({
+        type: 'calendar-data-ready',
+        data: {
+          events: cacheData.events,
+          calendars: cacheData.calendars,
+          lastUpdated: cacheData.lastUpdated,
+          status: 'success'
+        },
+        timestamp: Date.now()
+      }, '*');
+      
+      console.log('📅 📤 Calendar data sent to widget');
+    } catch (error) {
+      console.error('📅 ❌ Failed to send calendar data to widget:', error);
+    }
+  }
+
+  // NEW: Send photos data to widget
+  sendPhotosDataToWidget(widgetWindow, cacheData) {
+    if (!widgetWindow) return;
+    
+    try {
+      widgetWindow.postMessage({
+        type: 'photos-data-ready',
+        data: {
+          albums: cacheData.albums,
+          recentPhotos: cacheData.recentPhotos,
+          lastUpdated: cacheData.lastUpdated,
+          status: 'success'
+        },
+        timestamp: Date.now()
+      }, '*');
+      
+      console.log('📸 📤 Photos data sent to widget');
+    } catch (error) {
+      console.error('📸 ❌ Failed to send photos data to widget:', error);
+    }
+  }
+
+  // NEW: Send errors to pending widgets
+  sendErrorToPendingWidgets(dataType, errorMessage) {
+    const pendingRequests = this.pendingWidgetRequests.filter(req => req.type === dataType);
+    
+    pendingRequests.forEach(request => {
+      try {
+        request.window.postMessage({
+          type: `${dataType}-data-ready`,
+          data: {
+            events: dataType === 'calendar' ? [] : undefined,
+            calendars: dataType === 'calendar' ? [] : undefined,
+            albums: dataType === 'photos' ? [] : undefined,
+            recentPhotos: dataType === 'photos' ? [] : undefined,
+            status: 'error',
+            error: errorMessage
+          },
+          timestamp: Date.now()
+        }, '*');
+      } catch (error) {
+        console.error(`Failed to send error to ${dataType} widget:`, error);
+      }
+    });
+    
+    // Remove error requests
+    this.pendingWidgetRequests = this.pendingWidgetRequests.filter(req => req.type !== dataType);
+  }
+
+  // NEW: Schedule automatic data refresh
+  scheduleDataRefresh(dataType) {
+    // Clear existing timer
+    if (this.refreshTimers[dataType]) {
+      clearTimeout(this.refreshTimers[dataType]);
+    }
+    
+    const refreshInterval = this.dataCache[dataType].refreshInterval;
+    
+    this.refreshTimers[dataType] = setTimeout(() => {
+      console.log(`⏰ Auto-refreshing ${dataType} data`);
+      if (dataType === 'calendar') {
+        this.refreshCalendarData();
+      } else if (dataType === 'photos') {
+        this.refreshPhotosData();
+      }
+    }, refreshInterval);
+    
+    console.log(`⏰ Scheduled ${dataType} refresh in ${Math.round(refreshInterval / 1000 / 60)} minutes`);
+  }
+
+  // UPDATED: Initialize Google APIs with immediate data fetching
   async initializeGoogleAPIs() {
     if (!this.googleAccessToken) {
       console.warn('🔧 ⚠️ No Google access token available for API initialization');
@@ -154,24 +455,30 @@ export class AuthManager {
       this.googleAPI = new GoogleAPIClient(this);
       console.log('🔧 ✅ Google API client initialized');
       
-      // Test API access in background with a longer delay for restored users
+      // Test API access first
       setTimeout(async () => {
         try {
           console.log('🧪 Testing Google API access...');
           const testResults = await this.googleAPI.testAccess();
           console.log('🧪 ✅ Google API access test results:', testResults);
           
-          // Store API capabilities
-          this.apiCapabilities = testResults;
+          // If calendar access is available, start fetching data
+          if (testResults.calendar) {
+            console.log('📅 🚀 Starting initial calendar data fetch...');
+            await this.refreshCalendarData();
+          }
           
-          // FIXED: Send postMessage to ALL widgets instead of window event
+          // If photos access is available, start fetching data
+          if (testResults.photos) {
+            console.log('📸 🚀 Starting initial photos data fetch...');
+            await this.refreshPhotosData();
+          }
+          
+          // Send capabilities to widgets (for backward compatibility)
           this.notifyAllWidgets(testResults);
-          
-          console.log('🔧 📡 Google APIs ready notifications sent to widgets');
           
         } catch (error) {
           console.warn('🧪 ❌ Google API access test failed:', error);
-          // Send failure notification to widgets
           this.notifyAllWidgets({ 
             calendar: false, 
             photos: false, 
@@ -179,46 +486,26 @@ export class AuthManager {
             tokenStatus: 'error'
           });
         }
-      }, 3000); // Longer delay for restored users
+      }, 1000);
       
     } catch (error) {
       console.error('🔧 ❌ Failed to initialize Google API client:', error);
     }
   }
 
-  // NEW: Send postMessage to ALL widget iframes
+  // Send postMessage to ALL widget iframes (existing method - kept for compatibility)
   notifyAllWidgets(testResults) {
-    // Find ALL widget iframes, not just calendar
     const allWidgetIframes = document.querySelectorAll('.widget iframe, .widget-iframe');
     
     console.log(`📡 🖼️ Found ${allWidgetIframes.length} widget iframe(s) to notify`);
     
-    // Also log specific widget types for debugging
-    const calendarWidgets = document.querySelectorAll('iframe[src*="calendar.html"]');
-    const photoWidgets = document.querySelectorAll('iframe[src*="photos.html"]');
-    const clockWidgets = document.querySelectorAll('iframe[src*="clock.html"]');
-    const headerWidgets = document.querySelectorAll('iframe[src*="header.html"]');
-    const agendaWidgets = document.querySelectorAll('iframe[src*="agenda.html"]');
-    
-    console.log(`📡 📊 Widget breakdown:`, {
-      total: allWidgetIframes.length,
-      calendar: calendarWidgets.length,
-      photos: photoWidgets.length,
-      clock: clockWidgets.length,
-      header: headerWidgets.length,
-      agenda: agendaWidgets.length
-    });
-    
     if (allWidgetIframes.length === 0) {
       console.warn('📡 ⚠️ No widget iframes found - they may not be loaded yet');
-      // Retry notification after a delay in case widgets are still loading
       setTimeout(() => {
         const retryIframes = document.querySelectorAll('.widget iframe, .widget-iframe');
         if (retryIframes.length > 0) {
           console.log(`📡 🔄 Retry found ${retryIframes.length} widget iframe(s)`);
           this.sendGoogleAPIReadyMessage(retryIframes, testResults);
-        } else {
-          console.warn('📡 ⚠️ Still no widget iframes found after retry');
         }
       }, 2000);
     } else {
@@ -226,27 +513,17 @@ export class AuthManager {
     }
   }
 
-  // NEW: Helper method to send the actual postMessage with enhanced debugging
+  // Helper method to send the actual postMessage (existing method - kept for compatibility)
   sendGoogleAPIReadyMessage(iframes, testResults) {
     iframes.forEach((iframe, index) => {
-      // Enhanced debugging for each iframe
-      console.log(`📡 🔍 Widget ${index + 1} debug:`, {
-        src: iframe.src,
-        hasContentWindow: !!iframe.contentWindow,
-        readyState: iframe.readyState,
-        loaded: iframe.complete,
-        className: iframe.className,
-        id: iframe.id
-      });
-      
       if (iframe.contentWindow) {
         try {
           const message = {
             type: 'google-apis-ready',
             apiCapabilities: testResults,
             timestamp: Date.now(),
-            authManager: this, // Pass the auth manager reference
-            googleAccessToken: this.googleAccessToken, // Pass the access token directly
+            authManager: this,
+            googleAccessToken: this.googleAccessToken,
             debugInfo: {
               sentAt: new Date().toISOString(),
               widgetSrc: iframe.src,
@@ -254,70 +531,17 @@ export class AuthManager {
             }
           };
           
-          // Log the exact message being sent
-          console.log(`📡 📤 Sending to widget ${index + 1}:`, message);
-          
           iframe.contentWindow.postMessage(message, '*');
-          
-          console.log(`📡 ✅ Message sent to widget ${index + 1} (${iframe.src}):`, {
-            calendar: testResults.calendar,
-            tokenStatus: testResults.tokenStatus,
-            errorCount: testResults.errors?.length || 0
-          });
+          console.log(`📡 ✅ Message sent to widget ${index + 1} (${iframe.src})`);
           
         } catch (error) {
           console.error(`📡 ❌ Failed to send message to widget ${index + 1}:`, error);
         }
-      } else {
-        console.warn(`📡 ⚠️ Widget ${index + 1} contentWindow not available, setting up load listener`);
-        
-        // Retry after iframe loads
-        iframe.addEventListener('load', () => {
-          console.log(`📡 🔄 Widget ${index + 1} loaded, retrying message...`);
-          if (iframe.contentWindow) {
-            try {
-              const message = {
-                type: 'google-apis-ready',
-                apiCapabilities: testResults,
-                timestamp: Date.now(),
-                authManager: this, // Pass the auth manager reference
-                googleAccessToken: this.googleAccessToken, // Pass the access token directly
-                debugInfo: {
-                  sentAt: new Date().toISOString(),
-                  widgetSrc: iframe.src,
-                  widgetIndex: index + 1,
-                  isRetry: true
-                }
-              };
-              
-              console.log(`📡 📤 Retry sending to widget ${index + 1}:`, message);
-              iframe.contentWindow.postMessage(message, '*');
-              console.log(`📡 ✅ Retry message sent to widget ${index + 1}`);
-            } catch (retryError) {
-              console.error(`📡 ❌ Retry failed for widget ${index + 1}:`, retryError);
-            }
-          } else {
-            console.error(`📡 ❌ Widget ${index + 1} still has no contentWindow after load event`);
-          }
-        }, { once: true });
       }
     });
-    
-    // DEBUGGING: Also set up a global message listener to see what's actually being received
-    if (!window.debugMessageListener) {
-      console.log('📡 🐛 Setting up debug message listener to monitor postMessage traffic');
-      window.debugMessageListener = (event) => {
-        console.log('📡 🐛 DEBUG: Message received in main window:', {
-          type: event.data?.type,
-          origin: event.origin,
-          source: event.source,
-          data: event.data
-        });
-      };
-      window.addEventListener('message', window.debugMessageListener);
-    }
   }
 
+  // Existing auth methods continue unchanged...
   checkNativeUser() {
     if (this.nativeAuth) {
       const userData = this.nativeAuth.getCurrentUser();
@@ -329,16 +553,13 @@ export class AuthManager {
       }
     }
     
-    // No native user found, show sign-in prompt
     this.ui.showSignInPrompt(() => this.signIn(), () => this.exitApp());
   }
 
-  // ENHANCED: Update native auth handling
   handleNativeAuthResult(result) {
     console.log('🔐 Native auth result received:', result);
     
     if (result.success && result.user) {
-      // Native auth might also have tokens
       this.setUserFromAuth(result.user, 'native', result.tokens);
       this.isSignedIn = true;
       this.storage.saveUser(this.currentUser);
@@ -357,7 +578,6 @@ export class AuthManager {
     }
   }
 
-  // ENHANCED: Update device flow handling to pass tokens
   async startDeviceFlow() {
     try {
       console.log('🔥 Starting Device Flow authentication...');
@@ -367,7 +587,6 @@ export class AuthManager {
       const result = await this.deviceFlowAuth.startDeviceFlow();
       
       if (result.success && result.user) {
-        // Pass the tokens object so setUserFromAuth can extract access_token
         this.setUserFromAuth(result.user, 'device_flow', result.tokens);
         this.isSignedIn = true;
         this.storage.saveUser(this.currentUser);
@@ -383,7 +602,6 @@ export class AuthManager {
     }
   }
 
-  // ENHANCED: Update web auth handling
   handleWebAuthResult(result) {
     console.log('🔐 Web auth result received:', result);
     
@@ -392,7 +610,6 @@ export class AuthManager {
       this.isSignedIn = true;
       this.storage.saveUser(this.currentUser);
       
-      // CRITICAL: Hide sign-in UI and show dashboard immediately
       console.log('🔐 🎯 Hiding sign-in UI and showing dashboard...');
       this.ui.hideSignInPrompt();
       this.ui.showSignedInState();
@@ -404,16 +621,12 @@ export class AuthManager {
     }
   }
   
-  // ENHANCED: Store access token and initialize Google APIs
   async setUserFromAuth(userData, authMethod, tokens = null) {
-    // Determine the Google access token from various sources
     let googleAccessToken = null;
     
     if (tokens && tokens.access_token) {
       googleAccessToken = tokens.access_token;
       console.log('🔐 ✅ Found Google access token from tokens object (', authMethod, ')');
-      console.log('🔐 Token length:', tokens.access_token.length);
-      console.log('🔐 Token preview:', tokens.access_token.substring(0, 30) + '...');
     } else if (userData.googleAccessToken) {
       googleAccessToken = userData.googleAccessToken;
       console.log('🔐 ✅ Found Google access token from user data (', authMethod, ')');
@@ -422,10 +635,8 @@ export class AuthManager {
       console.log('🔐 ✅ Found Google access token from web auth (', authMethod, ')');
     } else {
       console.warn('🔐 ⚠️ No Google access token found for', authMethod);
-      console.warn('🔐 This means RLS authentication will not work');
     }
 
-    // Create user object with Google access token included
     this.currentUser = {
       id: userData.id,
       name: userData.name,
@@ -433,45 +644,15 @@ export class AuthManager {
       picture: userData.picture,
       signedInAt: Date.now(),
       authMethod: authMethod,
-      googleAccessToken: googleAccessToken // ← KEY FIX: Include token in user object
+      googleAccessToken: googleAccessToken
     };
 
-    // Store token separately for quick access (existing behavior)
     this.googleAccessToken = googleAccessToken;
 
-    // CRITICAL FIX: Initialize Google APIs for new users too
     if (this.googleAccessToken) {
       await this.initializeGoogleAPIs();
     }
 
-    // Enhanced debug logging
-    console.log('🔍 DEBUG setUserFromAuth DETAILED:', {
-      authMethod,
-      userId: userData.id,
-      userEmail: userData.email,
-      tokens_provided: !!tokens,
-      tokens_type: typeof tokens,
-      tokens_keys: tokens ? Object.keys(tokens) : null,
-      tokens_has_access_token: tokens?.access_token ? true : false,
-      access_token_length: tokens?.access_token?.length,
-      access_token_preview: tokens?.access_token?.substring(0, 20) + '...',
-      userData_has_googleAccessToken: !!userData.googleAccessToken,
-      webAuth_exists: !!this.webAuth,
-      webAuth_has_accessToken: !!this.webAuth?.accessToken,
-      FINAL_USER_HAS_TOKEN: !!this.currentUser.googleAccessToken,
-      STORED_TOKEN_MATCHES: this.googleAccessToken === this.currentUser.googleAccessToken
-    });
-
-    // Final verification
-    console.log('🔍 FINAL TOKEN STATUS:', {
-      authMethod,
-      hasStoredToken: !!this.googleAccessToken,
-      userObjectHasToken: !!this.currentUser.googleAccessToken,
-      tokenLength: this.googleAccessToken?.length,
-      canUseRLS: !!this.googleAccessToken
-    });
-
-    // Notify that auth is ready
     document.dispatchEvent(new CustomEvent('dashie-auth-ready'));
   }
   
@@ -498,12 +679,10 @@ export class AuthManager {
     console.log('🔐 Starting sign-in process...');
     
     if (this.isFireTV) {
-      // For Fire TV, always use Device Flow unless native auth is available and hasn't failed
       if (this.hasNativeAuth && !this.nativeAuthFailed) {
         console.log('🔥 Fire TV: Trying native auth first...');
         this.nativeAuth.signIn();
         
-        // Quick timeout to fallback to Device Flow
         setTimeout(() => {
           if (!this.isSignedIn && !this.nativeAuthFailed) {
             console.log('🔥 Native auth timeout, switching to Device Flow...');
@@ -533,14 +712,22 @@ export class AuthManager {
     }
   }
 
-  // NEW: Public method to get Google access token
   getGoogleAccessToken() {
     return this.googleAccessToken;
   }
 
-  // ENHANCED: Clear token on sign out
   signOut() {
     console.log('🔐 Signing out...');
+    
+    // Clear refresh timers
+    Object.values(this.refreshTimers).forEach(timer => clearTimeout(timer));
+    this.refreshTimers = {};
+    
+    // Clear data cache
+    this.dataCache = {
+      calendar: { events: [], calendars: [], lastUpdated: null, refreshInterval: 5 * 60 * 1000, isLoading: false },
+      photos: { albums: [], recentPhotos: [], lastUpdated: null, refreshInterval: 30 * 60 * 1000, isLoading: false }
+    };
     
     if (this.hasNativeAuth && this.nativeAuth) {
       this.nativeAuth.signOut();
@@ -553,11 +740,10 @@ export class AuthManager {
     this.currentUser = null;
     this.isSignedIn = false;
     this.nativeAuthFailed = false;
-    this.googleAccessToken = null; // NEW: Clear stored token
-    this.googleAPI = null; // Clear API client
+    this.googleAccessToken = null;
+    this.googleAPI = null;
     this.storage.clearSavedUser();
     
-    // Show appropriate sign-in prompt
     if (this.isWebView && !this.hasNativeAuth) {
       this.ui.showWebViewAuthPrompt(() => this.createWebViewUser(), () => this.exitApp());
     } else {
@@ -605,5 +791,40 @@ export class AuthManager {
 
   isAuthenticated() {
     return this.isSignedIn && this.currentUser !== null;
+  }
+
+  // NEW: Public methods for manual data refresh
+  async refreshData(dataType = 'all') {
+    if (dataType === 'all' || dataType === 'calendar') {
+      await this.refreshCalendarData(true);
+    }
+    if (dataType === 'all' || dataType === 'photos') {
+      await this.refreshPhotosData(true);
+    }
+  }
+
+  // NEW: Get cached data
+  getCachedData(dataType) {
+    if (dataType === 'calendar') {
+      return {
+        ...this.dataCache.calendar,
+        isStale: this.isDataStale('calendar')
+      };
+    } else if (dataType === 'photos') {
+      return {
+        ...this.dataCache.photos,
+        isStale: this.isDataStale('photos')
+      };
+    }
+    return null;
+  }
+
+  // NEW: Check if data is stale
+  isDataStale(dataType) {
+    const cacheData = this.dataCache[dataType];
+    if (!cacheData.lastUpdated) return true;
+    
+    const now = Date.now();
+    return (now - cacheData.lastUpdated) > cacheData.refreshInterval;
   }
 }
