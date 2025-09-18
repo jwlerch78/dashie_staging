@@ -234,7 +234,14 @@ export class AuthManager {
 
   // Widget communication methods (unchanged from original)
   setupWidgetRequestHandler() {
+    
     window.addEventListener('message', (event) => {
+        console.log('🔗 📨 PostMessages received:', {
+            type: event.data?.type,
+            origin: event.origin,
+            data: event.data
+          });
+      
       if (event.data.type === 'widget-data-request') {
         this.handleWidgetDataRequest(event.data, event.source);
       }
