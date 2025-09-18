@@ -1,20 +1,20 @@
 // js/ui/grid.js - Widget Grid & Sidebar Rendering with Theme Support (Fixed sidebarOptions)
-// CHANGE SUMMARY: Added missing sidebarOptions definition and fixed imports
+// CHANGE SUMMARY: Fixed all icon and logo paths to use absolute paths for OAuth callback compatibility
 
 import { state, elements, widgets, sidebarMapping, setFocus } from '../core/state.js';
 
-// FIXED: Add sidebarOptions definition that was missing
+// FIXED: Add sidebarOptions definition with absolute icon paths
 const sidebarOptions = [
   // Main content selection items (larger, always visible)
-  { id: "calendar", type: "main", iconSrc: "icons/icon-calendar.svg", label: "Calendar" },
-  { id: "map", type: "main", iconSrc: "icons/icon-map.svg", label: "Location Map" },
-  { id: "camera", type: "main", iconSrc: "icons/icon-video-camera.svg", label: "Camera Feed" },
+  { id: "calendar", type: "main", iconSrc: "/icons/icon-calendar.svg", label: "Calendar" },
+  { id: "map", type: "main", iconSrc: "/icons/icon-map.svg", label: "Location Map" },
+  { id: "camera", type: "main", iconSrc: "/icons/icon-video-camera.svg", label: "Camera Feed" },
   
   // System function items (smaller, in mini-grid)
-  { id: "reload", type: "system", iconSrc: "icons/icon-reload.svg", label: "Reload" },
-  { id: "sleep", type: "system", iconSrc: "icons/icon-sleep.svg", label: "Sleep" },
-  { id: "settings", type: "system", iconSrc: "icons/icon-settings.svg", label: "Settings" },
-  { id: "exit", type: "system", iconSrc: "icons/icon-exit.svg", label: "Exit" }
+  { id: "reload", type: "system", iconSrc: "/icons/icon-reload.svg", label: "Reload" },
+  { id: "sleep", type: "system", iconSrc: "/icons/icon-sleep.svg", label: "Sleep" },
+  { id: "settings", type: "system", iconSrc: "/icons/icon-settings.svg", label: "Settings" },
+  { id: "exit", type: "system", iconSrc: "/icons/icon-exit.svg", label: "Exit" }
 ];
 
 // ---------------------
@@ -165,21 +165,21 @@ export function renderGrid() {
 export function renderSidebar() {
   elements.sidebar.innerHTML = "";
 
-  // Add Dashie logo (only visible when expanded)
+  // Add Dashie logo (only visible when expanded) - FIXED: Absolute paths
   const logo = document.createElement("img");
   logo.classList.add("dashie-logo");
   logo.alt = "Dashie";
   
-  // Set logo source based on current theme immediately
+  // Set logo source based on current theme immediately with absolute paths
   import('../core/theme.js').then(({ getCurrentTheme }) => {
     const currentTheme = getCurrentTheme();
     const logoSrc = currentTheme === 'light' 
-      ? 'icons/Dashie_Full_Logo_Black_Transparent.png'
-      : 'icons/Dashie_Full_Logo_White_Transparent.png';
+      ? '/icons/Dashie_Full_Logo_Black_Transparent.png'
+      : '/icons/Dashie_Full_Logo_White_Transparent.png';
     logo.src = logoSrc;
   }).catch(() => {
-    // Fallback if theme system isn't loaded yet
-    logo.src = 'icons/Dashie_Full_Logo_White_Transparent.png';
+    // Fallback if theme system isn't loaded yet - using absolute path
+    logo.src = '/icons/Dashie_Full_Logo_White_Transparent.png';
   });
   
   elements.sidebar.appendChild(logo);
@@ -226,7 +226,7 @@ export function createMenuItem(item, type, globalIndex) {
     div.classList.add("active");
   }
 
-  // Icon - using CSS class instead of inline styles
+  // Icon - using CSS class instead of inline styles (iconSrc already has absolute path)
   const img = document.createElement("img");
   img.src = item.iconSrc;
   img.classList.add("menu-icon");

@@ -78,6 +78,10 @@ export class AuthManager {
     console.log('🔐 ✅ User set from Cognito:', {
       name: userData.name,
       email: userData.email,
+      picture: userData.picture,
+      firstname: userData.given_name,
+      lastname: userData.family_name,
+      id: userData.id,
       hasGoogleToken: !!this.googleAccessToken
     });
     

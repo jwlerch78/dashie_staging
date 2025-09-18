@@ -77,7 +77,7 @@
   --z-sleep: 1000;
 
   /* Theme-specific variables */
-  --sidebar-logo-src: url('../../icons/Dashie_Full_Logo_White_Transparent.png');
+  --sidebar-logo-src: url('/icons/Dashie_Full_Logo_White_Transparent.png');
   --sidebar-icon-filter: invert(100%); /* White icons for dark theme */
 }
 
@@ -106,7 +106,7 @@ body:not([class*="theme-"]) {
   --text-muted: #999;
 
   /* Theme-specific */
-  --sidebar-logo-src: url('../../icons/Dashie_Full_Logo_White_Transparent.png');
+  --sidebar-logo-src: url('/icons/Dashie_Full_Logo_White_Transparent.png');
   --sidebar-icon-filter: invert(100%); /* White icons */
 }
 
@@ -145,7 +145,7 @@ body.theme-light {
   --glow-focused: 0 0 15px rgba(33, 150, 243, 0.6), 0 0 30px rgba(33, 150, 243, 0.3);
 
   /* Theme-specific */
-  --sidebar-logo-src: url('../../icons/Dashie_Full_Logo_Orange_Transparent.png');
+  --sidebar-logo-src: url('/icons/Dashie_Full_Logo_Orange_Transparent.png');
   --sidebar-icon-filter: invert(20%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(0.3); /* Dark gray icons */
 }
 

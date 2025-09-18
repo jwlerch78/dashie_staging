@@ -26,12 +26,12 @@ export const THEME_CONFIG = {
   [THEMES.DARK]: {
     name: 'Dark Theme',
     className: 'theme-dark',
-    logoSrc: 'icons/Dashie_Full_Logo_White_Transparent.png'
+    logoSrc: '/icons/Dashie_Full_Logo_White_Transparent.png'
   },
   [THEMES.LIGHT]: {
     name: 'Light Theme', 
     className: 'theme-light',
-    logoSrc: 'icons/Dashie_Full_Logo_Black_Transparent.png'
+    logoSrc: '/icons/Dashie_Full_Logo_Black_Transparent.png'
   }
 };
 

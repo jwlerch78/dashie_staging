@@ -1,7 +1,11 @@
 {
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/oauth2/idpresponse",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/((?!css|js|icons|widgets|favicon\\.ico|.*\\.).*)$",
       "destination": "/index.html"
     }
   ],

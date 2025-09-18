@@ -1,4 +1,5 @@
 // js/core/state.js - Global State Management
+// CHANGE SUMMARY: Fixed widget URLs to use absolute paths for OAuth callback compatibility
 
 // ---------------------
 // APP STATE
@@ -10,16 +11,16 @@ export const elements = {
   sidebar: document.getElementById("sidebar")
 };
 
-// Widget URL mappings
+// Widget URL mappings - FIXED: All paths now absolute
 export const widgetUrls = {
-  calendar: "widgets/calendar.html",
-  clock: "widgets/clock.html", 
-  location: "widgets/location.html",
-  map: "widgets/map.html",
-  agenda: "widgets/agenda.html",
-  photos: "widgets/photos.html",
-  camera: "widgets/camera.html", // for future camera widget
-  header: "widgets/header.html"
+  calendar: "/widgets/calendar.html",
+  clock: "/widgets/clock.html", 
+  location: "/widgets/location.html",
+  map: "/widgets/map.html",
+  agenda: "/widgets/agenda.html",
+  photos: "/widgets/photos.html",
+  camera: "/widgets/camera.html", // for future camera widget
+  header: "/widgets/header.html"
 };
 
 // Widget layout configuration
