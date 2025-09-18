@@ -1,5 +1,5 @@
 // js/auth/cognito-config.js
-// FIXED: Scopes that actually work with Cognito
+// CHANGE SUMMARY: Fixed callback URL to use /oauth2/idpresponse instead of /auth/callback
 
 // Environment detection
 function getEnvironment() {
@@ -20,19 +20,15 @@ export const COGNITO_CONFIG = {
   // Cognito Domain
   domain: 'us-east-2wnbo8y8lm.auth.us-east-2.amazoncognito.com',
   
-  // OAuth Configuration - FIXED SCOPES
+  // OAuth Configuration - FIXED CALLBACK URL
   oauth: {
-    // Use the scopes that worked in your test
-    //scope: ['email', 'openid', 'phone'],
+    // Start with basic scopes that work, then add Google API scopes later
+    scope: ['openid', 'email'],
     
-    // After this works, we can add back the Google API scopes:
-   //  scope: ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/calendar.readonly', 'https://www.googleapis.com/auth/photoslibrary.readonly'],
-
-     scope: ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/calendar.readonly'],
-    
+    // FIXED: Use the standard Cognito callback URL
     redirectSignIn: environment === 'production' 
       ? 'https://dashieapp.com/oauth2/idpresponse'
-      : 'https://dev.dashieapp.com/oauth2/idpresponse', // Try the standard Cognito callback format
+      : 'https://dev.dashieapp.com/oauth2/idpresponse',
     redirectSignOut: environment === 'production'
       ? 'https://dashieapp.com/'
       : 'https://dev.dashieapp.com/',

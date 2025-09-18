@@ -1,5 +1,5 @@
 // js/auth/cognito-auth.js
-// Clean implementation without syntax errors
+// CHANGE SUMMARY: Fixed OAuth callback handling to properly process authorization code and wait for Cognito session
 
 import { COGNITO_CONFIG, AMPLIFY_CONFIG } from './cognito-config.js';
 
@@ -22,19 +22,23 @@ export class CognitoAuth {
       // Configure Amplify
       await this.configureAmplify();
       
-      // Check for existing session
-      const existingUser = await this.getCurrentSession();
-      if (existingUser) {
-        console.log('🔐 ✅ Found existing Cognito session:', existingUser.username);
-        this.currentUser = existingUser;
-        return { success: true, user: existingUser };
-      }
-      
-      // Check for OAuth callback
+      // FIRST: Check if we're handling an OAuth callback
       const callbackResult = await this.handleOAuthCallback();
       if (callbackResult.success) {
         console.log('🔐 ✅ OAuth callback handled successfully');
+        this.isInitialized = true;
         return callbackResult;
+      }
+      
+      // SECOND: Check for existing session (only if no callback)
+      if (!callbackResult.wasCallback) {
+        const existingUser = await this.getCurrentSession();
+        if (existingUser) {
+          console.log('🔐 ✅ Found existing Cognito session:', existingUser.username);
+          this.currentUser = existingUser;
+          this.isInitialized = true;
+          return { success: true, user: existingUser };
+        }
       }
       
       console.log('🔐 No existing authentication found');
@@ -63,13 +67,13 @@ export class CognitoAuth {
       }
       
       if (i < 5) {
-        console.log(`🔍 Attempt ${i + 1}: Still waiting...`);
+        console.log(`🔍 Attempt ${i + 1}: Still waiting for Amplify...`);
       }
       
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     
-    throw new Error('AWS Amplify failed to load');
+    throw new Error('AWS Amplify failed to load within timeout');
   }
 
   async configureAmplify() {
@@ -88,6 +92,124 @@ export class CognitoAuth {
       console.error('🔐 ❌ Amplify configuration failed:', error);
       throw error;
     }
+  }
+
+  async handleOAuthCallback() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const authCode = urlParams.get('code');
+    const error = urlParams.get('error');
+    const errorDescription = urlParams.get('error_description');
+    
+    // Check if this is a callback URL
+    const isCallback = authCode || error || window.location.pathname === '/oauth2/idpresponse';
+    
+    if (!isCallback) {
+      console.log('🔐 Not an OAuth callback URL');
+      return { success: false, reason: 'no_callback', wasCallback: false };
+    }
+    
+    console.log('🔐 🔄 Processing OAuth callback...', {
+      hasCode: !!authCode,
+      hasError: !!error,
+      pathname: window.location.pathname,
+      searchParams: window.location.search
+    });
+    
+    // Handle OAuth errors
+    if (error) {
+      console.error('🔐 ❌ OAuth callback error:', {
+        error,
+        errorDescription,
+        fullUrl: window.location.href
+      });
+      
+      // Clean up URL and show error
+      this.cleanupCallbackUrl();
+      return { 
+        success: false, 
+        error: `OAuth error: ${error} - ${errorDescription}`, 
+        wasCallback: true 
+      };
+    }
+    
+    // Handle successful callback with authorization code
+    if (authCode) {
+      console.log('🔐 ✅ Authorization code received, waiting for Cognito to process...');
+      
+      try {
+        // Wait for Cognito to process the authorization code
+        // This can take a moment, so we'll poll for the authenticated user
+        const user = await this.waitForAuthenticatedUser(10000); // 10 second timeout
+        
+        if (user) {
+          const userData = this.formatUserData(user);
+          this.currentUser = userData;
+          this.saveUserToStorage(userData);
+          
+          // Clean up the callback URL
+          this.cleanupCallbackUrl();
+          
+          console.log('🔐 ✅ OAuth callback processed successfully:', userData.email);
+          return { success: true, user: userData, wasCallback: true };
+        } else {
+          throw new Error('Failed to get authenticated user after authorization code processing');
+        }
+        
+      } catch (error) {
+        console.error('🔐 ❌ Failed to process authorization code:', error);
+        this.cleanupCallbackUrl();
+        return { 
+          success: false, 
+          error: `Authorization code processing failed: ${error.message}`, 
+          wasCallback: true 
+        };
+      }
+    }
+    
+    return { success: false, reason: 'callback_processing_failed', wasCallback: true };
+  }
+
+  async waitForAuthenticatedUser(timeoutMs = 10000) {
+    const startTime = Date.now();
+    let attempts = 0;
+    
+    while (Date.now() - startTime < timeoutMs) {
+      attempts++;
+      
+      try {
+        console.log(`🔐 🔄 Attempt ${attempts}: Checking for authenticated user...`);
+        
+        const user = await this.amplify.Auth.currentAuthenticatedUser();
+        if (user) {
+          console.log('🔐 ✅ Authenticated user found:', user.username);
+          
+          // Also get the session for tokens
+          const session = await this.amplify.Auth.currentSession();
+          if (session) {
+            this.cognitoTokens = {
+              idToken: session.getIdToken().getJwtToken(),
+              accessToken: session.getAccessToken().getJwtToken(),
+              refreshToken: session.getRefreshToken().getToken()
+            };
+            
+            // Try to extract Google access token
+            await this.extractGoogleAccessToken(session);
+          }
+          
+          return user;
+        }
+      } catch (error) {
+        if (error.message !== 'The user is not authenticated') {
+          console.warn(`🔐 ⚠️ Attempt ${attempts} error:`, error.message);
+        }
+      }
+      
+      // Wait before next attempt
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    console.error('🔐 ❌ Timeout waiting for authenticated user');
+    return null;
   }
 
   async getCurrentSession() {
@@ -118,56 +240,24 @@ export class CognitoAuth {
     return null;
   }
 
-  async handleOAuthCallback() {
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const authCode = urlParams.get('code');
-      
-      if (!authCode) {
-        return { success: false, reason: 'no_callback' };
-      }
-
-      console.log('🔐 Processing OAuth callback...');
-      
-      const user = await this.amplify.Auth.currentAuthenticatedUser();
-      
-      if (user) {
-        const session = await this.amplify.Auth.currentSession();
-        
-        this.cognitoTokens = {
-          idToken: session.getIdToken().getJwtToken(),
-          accessToken: session.getAccessToken().getJwtToken(),
-          refreshToken: session.getRefreshToken().getToken()
-        };
-        
-        await this.extractGoogleAccessToken(session);
-        
-        const userData = this.formatUserData(user);
-        this.currentUser = userData;
-        this.saveUserToStorage(userData);
-        
-        this.cleanupCallbackUrl();
-        
-        console.log('🔐 ✅ OAuth callback processed successfully');
-        return { success: true, user: userData };
-      }
-      
-    } catch (error) {
-      console.error('🔐 ❌ OAuth callback handling failed:', error);
-      return { success: false, error: error.message };
-    }
-    
-    return { success: false, reason: 'callback_processing_failed' };
-  }
-
   async extractGoogleAccessToken(session) {
     try {
-      const credentials = await this.amplify.Auth.currentCredentials();
+      // Try multiple methods to get Google access token
       
-      if (credentials && credentials.params && credentials.params.google_access_token) {
-        this.googleAccessToken = credentials.params.google_access_token;
-        console.log('🔐 ✅ Google access token extracted from Cognito');
-      } else {
+      // Method 1: Check credentials
+      try {
+        const credentials = await this.amplify.Auth.currentCredentials();
+        if (credentials && credentials.params && credentials.params.google_access_token) {
+          this.googleAccessToken = credentials.params.google_access_token;
+          console.log('🔐 ✅ Google access token extracted from credentials');
+          return;
+        }
+      } catch (credError) {
+        console.log('🔐 Method 1 (credentials) failed:', credError.message);
+      }
+      
+      // Method 2: Check ID token payload
+      try {
         const idToken = session.getIdToken();
         const payload = idToken.payload;
         
@@ -176,9 +266,15 @@ export class CognitoAuth {
           if (googleIdentity && googleIdentity.access_token) {
             this.googleAccessToken = googleIdentity.access_token;
             console.log('🔐 ✅ Google access token extracted from ID token');
+            return;
           }
         }
+      } catch (tokenError) {
+        console.log('🔐 Method 2 (ID token) failed:', tokenError.message);
       }
+      
+      console.log('🔐 ⚠️ No Google access token found - this is expected with basic scopes');
+      
     } catch (error) {
       console.error('🔐 ❌ Failed to extract Google access token:', error);
     }
@@ -214,9 +310,31 @@ export class CognitoAuth {
     }
   }
 
+  getSavedUser() {
+    try {
+      const saved = localStorage.getItem(COGNITO_CONFIG.storage.userDataKey);
+      if (saved) {
+        const userData = JSON.parse(saved);
+        
+        // Check if data is not too old (30 days)
+        if (userData.savedAt && (Date.now() - userData.savedAt < 30 * 24 * 60 * 60 * 1000)) {
+          return userData;
+        } else {
+          console.log('🔐 Saved user data expired, removing...');
+          localStorage.removeItem(COGNITO_CONFIG.storage.userDataKey);
+        }
+      }
+    } catch (error) {
+      console.error('🔐 ❌ Failed to load saved user:', error);
+    }
+    return null;
+  }
+
   cleanupCallbackUrl() {
-    const cleanUrl = window.location.origin + window.location.pathname;
-    window.history.replaceState({}, document.title, cleanUrl);
+    // Remove OAuth parameters from URL
+    const cleanUrl = window.location.origin + window.location.pathname.replace('/oauth2/idpresponse', '');
+    window.history.replaceState({}, document.title, cleanUrl || '/');
+    console.log('🔐 🧹 Cleaned up callback URL');
   }
 
   async signIn() {
@@ -268,6 +386,7 @@ export class CognitoAuth {
 
   async refreshSession() {
     try {
+      console.log('🔐 🔄 Refreshing Cognito session...');
       const session = await this.amplify.Auth.currentSession();
       
       this.cognitoTokens = {
