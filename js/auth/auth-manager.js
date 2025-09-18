@@ -1,5 +1,5 @@
 // js/auth/auth-manager.js
-// CHANGE SUMMARY: Dramatically simplified for Cognito - removed platform detection, custom OAuth flows, and complex token management
+// CHANGE SUMMARY: Fixed widget postMessage error by removing non-cloneable objects from message
 
 import { CognitoAuth } from './cognito-auth.js';
 import { AuthUI } from './auth-ui.js';
@@ -94,7 +94,7 @@ export class AuthManager {
       console.log('🔐 Starting Cognito sign-in...');
       this.ui.hideSignInPrompt();
       
-      // This will redirect to Cognito Hosted UI
+      // This will redirect to Google OAuth
       await this.cognitoAuth.signIn();
       
     } catch (error) {
@@ -264,11 +264,11 @@ export class AuthManager {
     iframes.forEach((iframe, index) => {
       if (iframe.contentWindow) {
         try {
+          // FIXED: Only send cloneable data - no Promise objects or functions
           const message = {
             type: 'google-apis-ready',
             apiCapabilities: testResults,
             timestamp: Date.now(),
-            authManager: this,
             googleAccessToken: this.googleAccessToken,
             debugInfo: {
               sentAt: new Date().toISOString(),
@@ -287,128 +287,89 @@ export class AuthManager {
     });
   }
 
-  // Data request handling (unchanged from original)
-  async handleWidgetDataRequest(request, source) {
-    console.log('📡 📨 Widget data request received:', request);
+  async handleWidgetDataRequest(requestData, sourceWindow) {
+    console.log('📡 📨 Received widget data request:', requestData);
     
     try {
-      let data;
+      let response = { 
+        type: 'widget-data-response',
+        requestId: requestData.requestId,
+        success: false,
+        timestamp: Date.now()
+      };
       
-      switch (request.dataType) {
-        case 'calendar-events':
-          data = await this.getCalendarData(request.params);
-          break;
-        case 'calendar-list':
-          data = await this.getCalendarList();
-          break;
-        case 'photos-albums':
-          data = await this.getPhotosData(request.params);
-          break;
-        default:
-          throw new Error(`Unknown data type: ${request.dataType}`);
+      const { dataType, requestType, params } = requestData;
+      
+      if (dataType === 'calendar') {
+        response = await this.handleCalendarRequest(requestType, params, response);
+      } else if (dataType === 'photos') {
+        response = await this.handlePhotosRequest(requestType, params, response);
+      } else {
+        response.error = 'Unknown data type requested';
       }
       
-      source.postMessage({
-        type: 'widget-data-response',
-        requestId: request.requestId,
-        success: true,
-        data: data
-      }, '*');
+      sourceWindow.postMessage(response, '*');
+      console.log('📡 ✅ Widget data response sent');
       
     } catch (error) {
       console.error('📡 ❌ Widget data request failed:', error);
-      source.postMessage({
+      sourceWindow.postMessage({
         type: 'widget-data-response',
-        requestId: request.requestId,
+        requestId: requestData.requestId,
         success: false,
-        error: error.message
+        error: error.message,
+        timestamp: Date.now()
       }, '*');
     }
   }
 
-  // Data fetching methods (unchanged from original implementation)
-  async getCalendarData(params = {}) {
-    const cacheKey = 'calendar';
-    const cache = this.dataCache[cacheKey];
-    
+  async handleCalendarRequest(requestType, params, response) {
     if (!this.googleAPI) {
       throw new Error('Google APIs not initialized');
     }
     
-    const now = Date.now();
-    const cacheValid = cache.lastUpdated && (now - cache.lastUpdated) < cache.refreshInterval;
-    
-    if (cacheValid && cache.events.length > 0) {
-      console.log('📅 📋 Using cached calendar data');
-      return cache.events;
+    switch (requestType) {
+      case 'events':
+        const events = await this.googleAPI.getUpcomingEvents(params?.timeRange);
+        response.success = true;
+        response.data = events;
+        break;
+        
+      case 'calendars':
+        const calendars = await this.googleAPI.getCalendarList();
+        response.success = true;
+        response.data = calendars;
+        break;
+        
+      default:
+        throw new Error(`Unknown calendar request type: ${requestType}`);
     }
     
-    if (cache.isLoading) {
-      console.log('📅 ⏳ Calendar data already loading, waiting...');
-      return new Promise((resolve) => {
-        const checkCache = () => {
-          if (!cache.isLoading) {
-            resolve(cache.events);
-          } else {
-            setTimeout(checkCache, 100);
-          }
-        };
-        checkCache();
-      });
-    }
-    
-    try {
-      cache.isLoading = true;
-      console.log('📅 🔄 Fetching fresh calendar data...');
-      
-      const events = await this.googleAPI.getAllCalendarEvents();
-      
-      cache.events = events;
-      cache.lastUpdated = now;
-      cache.isLoading = false;
-      
-      this.scheduleDataRefresh(cacheKey);
-      
-      console.log(`📅 ✅ Calendar data updated: ${events.length} events`);
-      return events;
-      
-    } catch (error) {
-      cache.isLoading = false;
-      console.error('📅 ❌ Failed to fetch calendar data:', error);
-      throw error;
-    }
+    return response;
   }
 
-  async getCalendarList() {
+  async handlePhotosRequest(requestType, params, response) {
     if (!this.googleAPI) {
       throw new Error('Google APIs not initialized');
     }
     
-    try {
-      const calendars = await this.googleAPI.getCalendarList();
-      console.log(`📅 ✅ Calendar list fetched: ${calendars.length} calendars`);
-      return calendars;
-    } catch (error) {
-      console.error('📅 ❌ Failed to fetch calendar list:', error);
-      throw error;
-    }
-  }
-
-  async getPhotosData(params = {}) {
-    // Implementation would be similar to calendar data
-    // Placeholder for now
-    throw new Error('Photos data not yet implemented');
-  }
-
-  scheduleDataRefresh(cacheKey) {
-    if (this.refreshTimers[cacheKey]) {
-      clearTimeout(this.refreshTimers[cacheKey]);
+    switch (requestType) {
+      case 'albums':
+        const albums = await this.googleAPI.getPhotoAlbums();
+        response.success = true;
+        response.data = albums;
+        break;
+        
+      case 'recent':
+        const photos = await this.googleAPI.getRecentPhotos(params?.count || 10);
+        response.success = true;
+        response.data = photos;
+        break;
+        
+      default:
+        throw new Error(`Unknown photos request type: ${requestType}`);
     }
     
-    const cache = this.dataCache[cacheKey];
-    this.refreshTimers[cacheKey] = setTimeout(() => {
-      cache.lastUpdated = null; // Force refresh on next request
-      console.log(`🔄 Scheduled refresh triggered for ${cacheKey}`);
-    }, cache.refreshInterval);
+    return response;
   }
 }

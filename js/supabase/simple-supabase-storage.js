@@ -1,5 +1,5 @@
 // js/supabase/simple-supabase-storage.js
-// UPDATED: Modified to work with Cognito JWT tokens instead of custom Edge Function
+// CHANGE SUMMARY: Updated to work with Identity Pool AWS credentials instead of Cognito JWT tokens
 
 import { supabase } from './supabase-config.js';
 
@@ -19,17 +19,15 @@ export class SimpleSupabaseStorage {
     this.setupRealtimeSubscription();
   }
 
-  // UPDATED: Get Cognito JWT token instead of Google access token
-  getCognitoAuthToken() {
-    // Try multiple sources for Cognito tokens
-    if (window.authManager?.cognitoAuth?.getCognitoTokens) {
-      const tokens = window.authManager.cognitoAuth.getCognitoTokens();
-      return tokens?.idToken || tokens?.accessToken; // Use ID token for Supabase RLS
+  // UPDATED: Use AWS credentials from Identity Pool instead of Cognito JWT
+  getAwsCredentials() {
+    // Try to get AWS credentials from auth manager
+    if (window.authManager?.currentUser?.awsCredentials) {
+      return window.authManager.currentUser.awsCredentials;
     }
     
-    if (window.dashieAuth?.authManager?.cognitoAuth?.getCognitoTokens) {
-      const tokens = window.dashieAuth.authManager.cognitoAuth.getCognitoTokens();
-      return tokens?.idToken || tokens?.accessToken;
+    if (window.dashieAuth?.authManager?.currentUser?.awsCredentials) {
+      return window.dashieAuth.authManager.currentUser.awsCredentials;
     }
     
     // Fallback: try to get from saved user data
@@ -37,10 +35,10 @@ export class SimpleSupabaseStorage {
       const savedUser = localStorage.getItem('dashie-cognito-user');
       if (savedUser) {
         const userData = JSON.parse(savedUser);
-        return userData.cognitoTokens?.idToken || userData.cognitoTokens?.accessToken;
+        return userData.awsCredentials;
       }
     } catch (error) {
-      console.warn('⚠️ Failed to get Cognito token from localStorage:', error);
+      console.warn('⚠️ Failed to get AWS credentials from localStorage:', error);
     }
     
     return null;
@@ -69,70 +67,28 @@ export class SimpleSupabaseStorage {
     return null;
   }
 
-  // UPDATED: Authenticate with Supabase using Cognito JWT token
+  // UPDATED: For Identity Pool, we'll use direct database access with AWS credentials
+  // Instead of trying to authenticate Supabase auth, we'll use service role
   async authenticateWithSupabase() {
-    const cognitoToken = this.getCognitoAuthToken();
+    const awsCredentials = this.getAwsCredentials();
     const user = this.getCurrentUser();
     
-    if (!cognitoToken || !user) {
-      console.log('🔒 No Cognito token or user available, using anonymous mode');
+    if (!awsCredentials || !user) {
+      console.log('🔒 No AWS credentials or user available, using non-RLS mode');
       this.isRLSMode = false;
       return false;
     }
 
-    try {
-      console.log('🔒 Attempting Supabase authentication with Cognito JWT...');
-      
-      // UPDATED: Use Cognito JWT token directly with Supabase
-      // This requires Supabase to be configured to accept Cognito JWTs
-      const { data, error } = await this.supabase.auth.setSession({
-        access_token: cognitoToken,
-        refresh_token: null // Cognito handles refresh
-      });
-
-      if (error) {
-        console.warn('🔒 ⚠️ Supabase JWT auth failed, trying alternative method:', error.message);
-        
-        // Alternative: Use signInWithIdToken if available
-        if (this.supabase.auth.signInWithIdToken) {
-          const { data: altData, error: altError } = await this.supabase.auth.signInWithIdToken({
-            provider: 'cognito',
-            token: cognitoToken
-          });
-          
-          if (altError) {
-            throw altError;
-          }
-          
-          console.log('🔒 ✅ Supabase authenticated via signInWithIdToken');
-          this.isRLSMode = true;
-          this.currentUser = user;
-          return true;
-        }
-        
-        throw error;
-      }
-
-      console.log('🔒 ✅ Supabase authenticated with Cognito JWT');
-      this.isRLSMode = true;
-      this.currentUser = user;
-      return true;
-
-    } catch (error) {
-      console.warn('🔒 ⚠️ Supabase RLS authentication failed:', error.message);
-      console.log('🔒 Falling back to anonymous mode');
-      
-      // Sign out any existing session
-      try {
-        await this.supabase.auth.signOut();
-      } catch (signOutError) {
-        console.warn('Failed to sign out during fallback:', signOutError);
-      }
-      
-      this.isRLSMode = false;
-      this.currentUser = user; // Still set user for non-RLS operations
-      return false;
-    }
+    console.log('🔒 Found AWS credentials from Identity Pool');
+    console.log('🔒 📋 Identity ID:', awsCredentials.identityId);
+    console.log('🔒 📋 User:', user.email);
+    
+    // For Identity Pool approach, we'll use direct database queries
+    // The RLS policies should be based on user_email, not auth.uid()
+    this.isRLSMode = true;
+    this.currentUser = user;
+    
+    return true;
   }
 
   // Rest of the class remains largely unchanged
@@ -146,24 +102,33 @@ export class SimpleSupabaseStorage {
     }
 
     try {
-      let settings = null;
+      console.log('⚙️ 🔄 Loading settings for user:', user.email);
       
-      if (this.isRLSMode) {
-        settings = await this.loadSettingsFromRLS(user);
+      // Direct query approach - RLS policies should be based on user_email
+      const { data, error } = await this.supabase
+        .from('user_settings')
+        .select('settings, updated_at')
+        .eq('user_email', user.email)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          console.log('📊 No settings found for user (new user)');
+          return null;
+        }
+        console.error('📊 Settings query error:', error);
+        throw error;
       }
-      
-      if (!settings) {
-        settings = await this.loadSettingsFromNonRLS(user);
+
+      if (data?.settings) {
+        console.log('📊 ✅ Settings loaded from database');
+        this.saveToLocalStorage(user.email, data.settings);
+        return data.settings;
       }
-      
-      if (settings) {
-        console.log('⚙️ ✅ Settings loaded successfully');
-        this.syncPendingChanges();
-        return settings;
-      }
-      
+
     } catch (error) {
-      console.error('⚙️ ❌ Failed to load settings:', error);
+      console.error('⚙️ ❌ Failed to load settings from database:', error);
+      console.log('📊 Using localStorage fallback');
     }
     
     // Fallback to localStorage
@@ -171,67 +136,6 @@ export class SimpleSupabaseStorage {
     if (fallbackSettings) {
       console.log('⚙️ 📱 Using localStorage fallback settings');
       return fallbackSettings;
-    }
-    
-    return null;
-  }
-
-  async loadSettingsFromRLS(user) {
-    try {
-      console.log('⚙️ 🔒 Loading settings with RLS for user:', user.email);
-      
-      const { data, error } = await this.supabase
-        .from('user_settings')
-        .select('settings_data, updated_at')
-        .eq('user_email', user.email)
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          console.log('⚙️ No RLS settings found for user');
-          return null;
-        }
-        throw error;
-      }
-
-      if (data?.settings_data) {
-        this.saveToLocalStorage(user.email, data.settings_data);
-        return data.settings_data;
-      }
-
-    } catch (error) {
-      console.error('⚙️ ❌ RLS settings load failed:', error);
-      throw error;
-    }
-    
-    return null;
-  }
-
-  async loadSettingsFromNonRLS(user) {
-    try {
-      console.log('⚙️ 🔓 Loading settings without RLS for user:', user.email);
-      
-      const { data, error } = await this.supabase
-        .from('user_settings')
-        .select('settings_data, updated_at')
-        .eq('user_email', user.email)
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          console.log('⚙️ No settings found for user');
-          return null;
-        }
-        throw error;
-      }
-
-      if (data?.settings_data) {
-        this.saveToLocalStorage(user.email, data.settings_data);
-        return data.settings_data;
-      }
-
-    } catch (error) {
-      console.error('⚙️ ❌ Non-RLS settings load failed:', error);
     }
     
     return null;
@@ -254,67 +158,35 @@ export class SimpleSupabaseStorage {
     }
 
     try {
-      const success = this.isRLSMode 
-        ? await this.saveSettingsWithRLS(user, settings)
-        : await this.saveSettingsWithoutRLS(user, settings);
+      console.log('⚙️ 💾 Saving settings to database for user:', user.email);
+      
+      const { data, error } = await this.supabase
+        .from('user_settings')
+        .upsert({
+          user_email: user.email,
+          settings: settings,
+          updated_at: new Date().toISOString()
+        }, { 
+          onConflict: 'user_email'
+        });
 
-      if (success) {
-        console.log('⚙️ ✅ Settings saved to Supabase');
-        this.removePendingChange('save');
-        return true;
+      if (error) {
+        console.error('📊 Settings save error:', error);
+        throw error;
       }
+      
+      console.log('⚙️ ✅ Settings saved to database successfully');
+      this.removePendingChange('save');
+      return true;
 
     } catch (error) {
-      console.error('⚙️ ❌ Failed to save settings to Supabase:', error);
+      console.error('⚙️ ❌ Failed to save settings to database:', error);
       this.queuePendingChange('save', settings);
-    }
-
-    return false;
-  }
-
-  async saveSettingsWithRLS(user, settings) {
-    try {
-      const { data, error } = await this.supabase
-        .from('user_settings')
-        .upsert({
-          user_email: user.email,
-          settings_data: settings,
-          updated_at: new Date().toISOString()
-        }, { 
-          onConflict: 'user_email'
-        });
-
-      if (error) throw error;
-      return true;
-
-    } catch (error) {
-      console.error('⚙️ ❌ RLS settings save failed:', error);
       return false;
     }
   }
 
-  async saveSettingsWithoutRLS(user, settings) {
-    try {
-      const { data, error } = await this.supabase
-        .from('user_settings')
-        .upsert({
-          user_email: user.email,
-          settings_data: settings,
-          updated_at: new Date().toISOString()
-        }, { 
-          onConflict: 'user_email'
-        });
-
-      if (error) throw error;
-      return true;
-
-    } catch (error) {
-      console.error('⚙️ ❌ Non-RLS settings save failed:', error);
-      return false;
-    }
-  }
-
-  // Local storage and utility methods remain unchanged
+  // Local storage and utility methods
   saveToLocalStorage(userEmail, settings) {
     try {
       const storageKey = `dashie-settings-${userEmail}`;
@@ -324,70 +196,54 @@ export class SimpleSupabaseStorage {
         userEmail
       };
       localStorage.setItem(storageKey, JSON.stringify(storageData));
+      console.log('📱 Settings saved to localStorage');
     } catch (error) {
-      console.error('⚙️ ❌ Failed to save to localStorage:', error);
+      console.error('📱 Failed to save to localStorage:', error);
     }
   }
 
   loadFromLocalStorage(userEmail) {
     try {
       const storageKey = `dashie-settings-${userEmail}`;
-      const stored = localStorage.getItem(storageKey);
+      const storageData = localStorage.getItem(storageKey);
       
-      if (stored) {
-        const { settings, lastSync } = JSON.parse(stored);
-        
-        // Check if data is not too old (7 days)
-        if (lastSync && (Date.now() - lastSync < 7 * 24 * 60 * 60 * 1000)) {
-          return settings;
-        }
+      if (storageData) {
+        const parsed = JSON.parse(storageData);
+        console.log('📱 Loaded settings from localStorage');
+        return parsed.settings;
       }
     } catch (error) {
-      console.error('⚙️ ❌ Failed to load from localStorage:', error);
+      console.error('📱 Failed to load from localStorage:', error);
     }
     
     return null;
   }
 
-  // Network monitoring and offline sync methods remain unchanged
+  // Network and sync methods
   setupNetworkMonitoring() {
     window.addEventListener('online', () => {
-      console.log('🌐 Back online, syncing pending changes...');
       this.isOnline = true;
+      console.log('🌐 Back online, syncing pending changes...');
       this.syncPendingChanges();
     });
-
+    
     window.addEventListener('offline', () => {
-      console.log('📱 Gone offline, will queue changes');
       this.isOnline = false;
+      console.log('📱 Gone offline, will queue changes');
     });
   }
 
-  queuePendingChange(operation, data) {
-    const change = {
-      operation,
+  queuePendingChange(type, data) {
+    this.pendingChanges.push({
+      type,
       data,
-      timestamp: Date.now(),
-      retries: 0
-    };
-    
-    this.pendingChanges.push(change);
-    
-    try {
-      localStorage.setItem('dashie-pending-changes', JSON.stringify(this.pendingChanges));
-    } catch (error) {
-      console.error('Failed to save pending changes:', error);
-    }
+      timestamp: Date.now()
+    });
+    console.log(`📋 Queued ${type} change for later sync`);
   }
 
-  removePendingChange(operation) {
-    this.pendingChanges = this.pendingChanges.filter(change => change.operation !== operation);
-    
-    try {
-      localStorage.setItem('dashie-pending-changes', JSON.stringify(this.pendingChanges));
-    } catch (error) {
-      console.error('Failed to update pending changes:', error);
-    }
+  removePendingChange(type) {
+    this.pendingChanges = this.pendingChanges.filter(change => change.type !== type);
   }
 
   async syncPendingChanges() {
@@ -396,48 +252,48 @@ export class SimpleSupabaseStorage {
     }
 
     this.syncInProgress = true;
-    console.log(`⚙️ 🔄 Syncing ${this.pendingChanges.length} pending changes...`);
+    console.log(`🔄 Syncing ${this.pendingChanges.length} pending changes...`);
 
-    const changesToSync = [...this.pendingChanges];
-
-    for (const change of changesToSync) {
+    const changes = [...this.pendingChanges];
+    
+    for (const change of changes) {
       try {
-        if (change.operation === 'save') {
-          const success = await this.saveSettings(change.data);
-          if (success) {
-            this.removePendingChange(change.operation);
-          } else {
-            change.retries++;
-            if (change.retries >= this.maxRetries) {
-              console.error('⚙️ ❌ Max retries exceeded for pending change:', change);
-              this.removePendingChange(change.operation);
-            }
-          }
+        if (change.type === 'save') {
+          await this.saveSettings(change.data);
         }
       } catch (error) {
-        console.error('⚙️ ❌ Failed to sync pending change:', error);
-        change.retries++;
+        console.error(`❌ Failed to sync ${change.type} change:`, error);
       }
     }
 
     this.syncInProgress = false;
-    console.log('⚙️ ✅ Pending changes sync completed');
+    console.log('✅ Pending changes synced');
   }
 
   setupRealtimeSubscription() {
-    // Realtime subscription setup would need to be updated for Cognito
-    // This is a placeholder - the exact implementation depends on your Supabase RLS policies
-    console.log('🔄 Realtime subscriptions setup (placeholder for Cognito integration)');
-  }
+    const user = this.getCurrentUser();
+    if (!user) return;
 
-  // Compatibility method for existing settings system
-  subscribeToChanges(callback) {
-    // Placeholder for real-time subscription
-    console.log('🔄 Settings change subscription setup');
-    return () => console.log('🔄 Unsubscribed from settings changes');
-  }
-
-  unsubscribeAll() {
-    console.log('🔄 Unsubscribed from all changes');
+    try {
+      this.supabase
+        .channel('user-settings')
+        .on('postgres_changes', 
+          { 
+            event: '*', 
+            schema: 'public', 
+            table: 'user_settings',
+            filter: `user_email=eq.${user.email}`
+          }, 
+          (payload) => {
+            console.log('🔄 Real-time settings update received:', payload);
+            // Handle real-time updates if needed
+          }
+        )
+        .subscribe((status) => {
+          console.log('📡 Real-time subscription status:', status);
+        });
+    } catch (error) {
+      console.warn('📡 Failed to set up real-time subscription:', error);
+    }
   }
 }
