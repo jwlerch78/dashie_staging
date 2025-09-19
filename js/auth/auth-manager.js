@@ -337,7 +337,7 @@ export class AuthManager {
     
     switch (requestType) {
       case 'events':
-        const events = await this.googleAPI.getUpcomingEvents(params?.timeRange);
+        const events = await this.googleAPI.getAllCalendarEvents(params?.timeRange);
         response.success = true;
         response.data = events;
         break;

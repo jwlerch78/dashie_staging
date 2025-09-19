@@ -4,7 +4,9 @@
 // ==================== CONFIG VARIABLES ====================
 
 // How many months ahead to pull events
-const MONTHS_TO_PULL = 3;
+// How many months ahead to pull events
+const MONTHS_AHEAD_TO_PULL = 3;
+const MONTHS_BACK_TO_PULL = 1;
 
 // Calendars to include by summary (name/email as shown in calendar list)
 const CALENDARS_TO_INCLUDE = [
@@ -222,8 +224,9 @@ export class GoogleAPIClient {
     console.log(`📅 Fetching events from calendar: ${calendarId}`);
     
     const now = new Date();
-    const defaultTimeMin = timeMin || now.toISOString();
-    const defaultTimeMax = timeMax || new Date(now.getTime() + (MONTHS_TO_PULL * 30 * 24 * 60 * 60 * 1000)).toISOString();
+    const defaultTimeMin = timeMin || new Date(now.getTime() - (MONTHS_BACK_TO_PULL * 30 * 24 * 60 * 60 * 1000)).toISOString();
+    const defaultTimeMax = timeMax || new Date(now.getTime() + (MONTHS_AHEAD_TO_PULL * 30 * 24 * 60 * 60 * 1000)).toISOString();
+
     
     const params = new URLSearchParams({
       timeMin: defaultTimeMin,

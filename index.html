@@ -90,6 +90,12 @@
     <!-- Sleep overlay -->
     <div id="sleep-overlay" class="sleep-overlay" style="display: none;"></div>
 
+      <!-- Configuration (keep this) -->
+      <script src="/js/config.js"></script>
+    
+    <!-- Preload auth system (FIXED: Absolute path) -->
+    <script type="module" src="/js/auth/simple-auth.js"></script>
+    
     <!-- JavaScript modules (FIXED: All paths now absolute) -->
     <script type="module">
         // FIXED: Import and initialize the app with correct function name and absolute path
@@ -107,10 +113,6 @@
         });
     </script>
 
-      <!-- Configuration (keep this) -->
-      <script src="/js/config.js"></script>
-    
-    <!-- Preload auth system (FIXED: Absolute path) -->
-    <script type="module" src="/js/auth/simple-auth.js"></script>
+
 </body>
 </html>
