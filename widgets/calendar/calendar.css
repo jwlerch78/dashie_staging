@@ -145,10 +145,13 @@ html, body {
   overflow: hidden;
 }
 
-.toastui-calendar-allday-event {
+/* All-day events */
+.toastui-calendar-allday-event,
+.toastui-calendar-allday-event .toastui-calendar-event,
+.toastui-calendar-allday-event .toastui-calendar-event-time-content {
   margin: 1px 4px;
   padding: 2px 4px;
-  border-radius: 3px;
+  border-radius: 8px !important;
   font-size: 11px;
   white-space: nowrap;
   overflow: hidden;
@@ -167,9 +170,16 @@ html, body {
 
 /* Event text wrapping for all-day and timed events */
 .toastui-calendar-event .toastui-calendar-content {
-  white-space: normal;
+  white-space: normal !important;
   word-wrap: break-word;
   overflow-wrap: break-word;
+  border-radius: 8px !important;
+  overflow: visible !important;
+  line-height: 1.2em;              
+}
+
+.toastui-calendar-event-time {
+  border-radius: 8px !important;
 }
 
 /* Hide left-hand exact time column */
@@ -189,4 +199,9 @@ html, body {
 /* Additional theme/color styling */
 .toastui-calendar-day-name * {
   color: var(--text-primary, #fff);
+}
+
+.toastui-calendar-event-time.force-opacity,
+.toastui-calendar-allday-event.force-opacity {
+  opacity: 1 !important;
 }
