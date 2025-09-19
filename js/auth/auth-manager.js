@@ -355,57 +355,22 @@ export class AuthManager {
     return response;
   }
 
-// Auth Manager Photos Request Handler - Updated for new request types
-// CHANGE SUMMARY: Added support for 'default' request type and enhanced Photos API error handling
-
-async handlePhotosRequest(requestType, params, response) {
+  async handlePhotosRequest(requestType, params, response) {
     if (!this.googleAPI) {
       throw new Error('Google APIs not initialized');
     }
-    
-    console.log(`📸 Handling photos request: ${requestType}`, params);
     
     switch (requestType) {
       case 'albums':
         const albums = await this.googleAPI.getPhotoAlbums();
         response.success = true;
         response.data = albums;
-        console.log(`📸 ✅ Retrieved ${albums.length} albums for widget`);
         break;
         
       case 'recent':
-        const recentPhotos = await this.googleAPI.getRecentPhotos(params?.count || 50);
+        const photos = await this.googleAPI.getRecentPhotos(params?.count || 10);
         response.success = true;
-        response.data = recentPhotos;
-        console.log(`📸 ✅ Retrieved ${recentPhotos.length} recent photos for widget`);
-        break;
-        
-      case 'default':
-        // Use the configured default album (Favorites, Recent, or specific album)
-        const defaultPhotos = await this.googleAPI.getDefaultAlbumPhotos(params?.count || 50);
-        response.success = true;
-        response.data = defaultPhotos;
-        console.log(`📸 ✅ Retrieved ${defaultPhotos.length} photos from default album for widget`);
-        break;
-        
-      case 'favorites':
-      case 'starred':
-        // Explicit request for starred/favorited photos
-        const starredPhotos = await this.googleAPI.getStarredPhotos(params?.count || 50);
-        response.success = true;
-        response.data = starredPhotos;
-        console.log(`📸 ⭐ Retrieved ${starredPhotos.length} starred photos for widget`);
-        break;
-        
-      case 'album':
-        // Get photos from a specific album ID
-        if (!params?.albumId) {
-          throw new Error('Album ID required for album request');
-        }
-        const albumPhotos = await this.googleAPI.getAlbumPhotos(params.albumId, params?.count || 50);
-        response.success = true;
-        response.data = albumPhotos;
-        console.log(`📸 ✅ Retrieved ${albumPhotos.length} photos from album ${params.albumId} for widget`);
+        response.data = photos;
         break;
         
       default:
@@ -414,3 +379,4 @@ async handlePhotosRequest(requestType, params, response) {
     
     return response;
   }
+}

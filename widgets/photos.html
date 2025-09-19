@@ -1,34 +1,11 @@
-<!-- Photos.html -->
-<!-- Using Google API -->
+<!-- photos.html -->
 
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
   <title>Photos Widget</title>
-  
-  <!-- Apply theme immediately to prevent flash -->
-  <script>
-    (function() {
-      try {
-        const savedTheme = localStorage.getItem('dashie-theme') || 'dark';
-        document.documentElement.className = `theme-${savedTheme}`;
-        if (document.body) {
-          document.body.className = `theme-${savedTheme}`;
-        } else {
-          document.addEventListener('DOMContentLoaded', function() {
-            document.body.className = `theme-${savedTheme}`;
-          });
-        }
-      } catch (e) {
-        document.documentElement.className = 'theme-dark';
-        if (document.body) document.body.className = 'theme-dark';
-      }
-    })();
-  </script>
-  
-  <!-- Import theme variables from parent -->
   <link rel="stylesheet" href="../css/core/variables.css">
 </head>
 
@@ -36,7 +13,7 @@
 html, body {
   height: 100%;
   margin: 0;
-  background: var(--bg-primary, #222);
+  background: var(--bg-primary, #000);
   overflow: hidden;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   display: flex;
@@ -49,551 +26,162 @@ html, body {
   height: 100%;     
   background: var(--bg-primary);
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 #photo-container img {
   position: absolute;
-  top: var(--padding-widget, 8px);
-  left: var(--padding-widget, 8px);
-  right: var(--padding-widget, 8px);
-  bottom: var(--padding-widget, 8px);
-  width: calc(100% - calc(var(--padding-widget, 8px) * 2));
-  height: calc(100% - calc(var(--padding-widget, 8px) * 2));
+  top: var(--padding-widget);
+  left: var(--padding-widget);
+  right: var(--padding-widget);
+  bottom: var(--padding-widget);
+  width: calc(100% - calc(var(--padding-widget) * 2));
+  height: calc(100% - calc(var(--padding-widget) * 2));
   object-fit: contain;
   object-position: center center;
   display: block;
   transition: opacity 0.3s ease;
-  border-radius: 8px;
-}
-
-/* Loading state */
-.loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--text-secondary, #ccc);
-  font-size: 14px;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.status {
-  font-size: 12px;
-  color: var(--text-muted, #999);
-}
-
-.status.connecting {
-  color: #ffa500;
-}
-
-.status.connected {
-  color: #00ff00;
-}
-
-.status.error {
-  color: #ff4444;
-}
-
-/* Photo info overlay */
-.photo-info {
-  position: absolute;
-  bottom: var(--padding-widget, 8px);
-  left: var(--padding-widget, 8px);
-  right: var(--padding-widget, 8px);
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-}
-
-#photo-container:hover .photo-info {
-  opacity: 1;
-}
-
-.photo-title {
-  font-weight: 500;
-  margin-bottom: 2px;
-}
-
-.photo-details {
-  font-size: 11px;
-  opacity: 0.8;
-}
-
-/* Controls info */
-.controls-info {
-  position: absolute;
-  top: var(--padding-widget, 8px);
-  right: var(--padding-widget, 8px);
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 10px;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-}
-
-#photo-container:hover .controls-info {
-  opacity: 1;
-}
-
-/* Error state */
-.error-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--text-secondary, #ccc);
-  font-size: 14px;
-  flex-direction: column;
-  gap: 10px;
-  text-align: center;
-  padding: 20px;
-}
-
-.error-title {
-  color: #ff4444;
-  font-weight: 500;
-}
-
-.error-message {
-  font-size: 12px;
-  color: var(--text-muted, #999);
-}
-
-/* Hidden states */
-.hidden {
-  display: none !important;
 }
 </style>
-
-<body class="theme-dark">
+  
+<body>
   <div id="photo-container">
-    <!-- Loading State -->
-    <div class="loading" id="loading">
-      Loading photos...
-      <div class="status" id="status">●</div>
-    </div>
-    
-    <!-- Error State -->
-    <div class="error-state hidden" id="error-state">
-      <div class="error-title">Unable to load photos</div>
-      <div class="error-message" id="error-message">Checking Google Photos access...</div>
-    </div>
-    
-    <!-- Photo Display -->
-    <img id="photoImg" src="" alt="Photo" class="hidden">
-    
-    <!-- Photo Info Overlay -->
-    <div class="photo-info" id="photo-info">
-      <div class="photo-title" id="photo-title">Photo Title</div>
-      <div class="photo-details" id="photo-details">Details</div>
-    </div>
-    
-    <!-- Controls Info -->
-    <div class="controls-info">
-      ←→: Navigate | Space: Pause
-    </div>
+    <img id="photoImg" src="" alt="Slideshow Photo">
   </div>
+  
+  <!-- Load photos.js first, then leftpanel.js -->
+  <script src="../js/config.js"></script>
+  <script src="photos/photos.js"></script>
 
-  <script type="module">
-    // CHANGE SUMMARY: Complete Google Photos widget with centralized API communication and D-pad navigation
-    
-    class PhotosWidget {
-      constructor() {
-        this.photos = [];
-        this.currentPhotoIndex = 0;
-        this.autoAdvanceInterval = null;
-        this.transitionTime = 5000; // 5 seconds default
-        this.isDataLoaded = false;
-        this.isPaused = false;
-        
-        // DOM elements
-        this.photoImg = document.getElementById('photoImg');
-        this.loading = document.getElementById('loading');
-        this.status = document.getElementById('status');
-        this.errorState = document.getElementById('error-state');
-        this.errorMessage = document.getElementById('error-message');
-        this.photoInfo = document.getElementById('photo-info');
-        this.photoTitle = document.getElementById('photo-title');
-        this.photoDetails = document.getElementById('photo-details');
-        
-        this.init();
-      }
+<script>
+// photo_widget.js - with D-pad navigation support and settings integration
+document.addEventListener("DOMContentLoaded", function() {
+  // --- Elements ---
+  const photoImg = document.getElementById("photoImg");
+  
+  // --- Photo State ---
+  let currentPhotoIndex = 0;
+  let shuffledPhotos = [];
+  let autoAdvanceInterval = null;
+  let transitionTime = 15; // Default 15 seconds, can be updated from settings
+ 
+  // --- Photo Functions ---
+  function shuffleArray(array) {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
 
-      init() {
-        console.log('📸 Photos widget initializing...');
-        this.setupMessageHandlers();
-        this.updateConnectionStatus('connecting');
-        
-        // Request photos data after a short delay to ensure parent is ready
-        setTimeout(() => {
-          this.requestPhotosData();
-        }, 1000);
-      }
+  function showPhoto(index) {
+    if (index < 0) {
+      currentPhotoIndex = shuffledPhotos.length - 1;
+    } else if (index >= shuffledPhotos.length) {
+      currentPhotoIndex = 0;
+    } else {
+      currentPhotoIndex = index;
+    }
+    photoImg.src = shuffledPhotos[currentPhotoIndex] + "?t=" + Date.now();
+    console.log(`📸 Showing photo ${currentPhotoIndex + 1} of ${shuffledPhotos.length}`);
+  }
 
-      setupMessageHandlers() {
-        window.addEventListener('message', (event) => {
-          if (!event.data || !event.data.type) return;
-          
-          console.log('📸 📨 Received message:', event.data.type);
-          this.handleDataServiceMessage(event.data);
-        });
+  function nextPhoto() {
+    showPhoto(currentPhotoIndex + 1);
+  }
 
-        // Handle D-pad navigation
-        window.addEventListener('keydown', (event) => {
-          if (!this.isDataLoaded || this.photos.length === 0) return;
-          
-          switch (event.key) {
-            case 'ArrowLeft':
-            case 'ArrowUp':
-              event.preventDefault();
-              this.prevPhoto();
-              break;
-            case 'ArrowRight':
-            case 'ArrowDown':
-              event.preventDefault();
-              this.nextPhoto();
-              break;
-            case ' ':
-            case 'Enter':
-              event.preventDefault();
-              this.togglePause();
-              break;
-          }
-        });
+  function prevPhoto() {
+    showPhoto(currentPhotoIndex - 1);
+  }
 
-        // Handle navigation commands from parent
-        window.addEventListener('message', (event) => {
-          if (event.data && event.data.action) {
-            const action = event.data.action;
-            console.log('📸 Photos widget received command:', action);
-            
-            switch(action) {
-              case 'right':
-              case 'down':
-                this.nextPhoto();
-                break;
-              case 'left':
-              case 'up':
-                this.prevPhoto();
-                break;
-              case 'enter':
-                this.togglePause();
-                break;
-            }
-          }
-        });
-      }
-
-      handleDataServiceMessage(data) {
-        switch (data.type) {
-          case 'widget-data-response':
-            console.log('📸 📨 Received widget data response:', data);
-            if (data.success && data.data) {
-              this.handlePhotosData(data.data);
-            } else {
-              console.error('📸 ❌ Widget data response error:', data.error);
-              this.showError(`Failed to load photos: ${data.error || 'Unknown error'}`);
-            }
-            break;
-            
-          case 'theme-change':
-            console.log('📸 🎨 Received theme change:', data.theme);
-            this.applyTheme(data.theme);
-            break;
-            
-          case 'google-apis-ready':
-            console.log('📸 🔗 Google APIs ready, requesting photos data');
-            setTimeout(() => this.requestPhotosData(), 1000);
-            break;
-
-          case 'update-settings':
-            if (data.photoTransitionTime) {
-              this.updateTransitionTime(data.photoTransitionTime * 1000); // Convert to ms
-            }
-            break;
-        }
-      }
-
-      requestPhotosData() {
-        console.log('📸 📤 Requesting photos data from centralized service...');
-        
-        try {
-          window.parent.postMessage({
-            type: 'widget-data-request',
-            dataType: 'photos',
-            requestType: 'albums', // First get albums for console logging
-            requestId: Date.now() + '_albums',
-            params: {}
-          }, '*');
-
-          // Then get the actual photos to display
-          setTimeout(() => {
-            window.parent.postMessage({
-              type: 'widget-data-request',
-              dataType: 'photos',
-              requestType: 'default', // Use default configured album
-              requestId: Date.now() + '_photos',
-              params: { count: 50 }
-            }, '*');
-          }, 500);
-          
-          this.updateConnectionStatus('connecting');
-          console.log('📸 ✅ PostMessage sent successfully');
-          
-        } catch (error) {
-          console.error('📸 ❌ Failed to request photos data:', error);
-          this.showError('Failed to request photos data');
-        }
-      }
-
-      handlePhotosData(data) {
-        console.log('📸 ✅ Photos data received:', data);
-        
-        if (!data || data.length === 0) {
-          this.showError('No photos found in the configured album');
-          return;
-        }
-
-        this.photos = data;
-        this.isDataLoaded = true;
-        this.updateConnectionStatus('connected');
-
-        console.log(`📸 ✅ Loaded ${this.photos.length} photos`);
-
-        // Start slideshow
-        this.startSlideshow();
-      }
-
-      startSlideshow() {
-        if (this.photos.length === 0) return;
-        
-        // Hide loading, show photo
-        this.loading.classList.add('hidden');
-        this.errorState.classList.add('hidden');
-        this.photoImg.classList.remove('hidden');
-        
-        // Shuffle photos for variety
-        this.photos = this.shuffleArray([...this.photos]);
-        this.currentPhotoIndex = 0;
-        
-        this.showPhoto(0);
-        this.startAutoAdvance();
-      }
-
-      showPhoto(index) {
-        if (!this.photos || this.photos.length === 0) return;
-        
-        const photo = this.photos[index];
-        if (!photo) return;
-
-        // Generate display URL with appropriate size
-        const displayUrl = this.getDisplayPhotoUrl(photo.baseUrl, 800, 600);
-        
-        console.log(`📸 Showing photo ${index + 1}/${this.photos.length}: ${photo.filename || 'Untitled'}`);
-        
-        // Update image
-        this.photoImg.src = displayUrl;
-        this.photoImg.alt = photo.description || photo.filename || 'Photo';
-        
-        // Update info overlay
-        this.photoTitle.textContent = photo.filename || 'Untitled';
-        
-        const creationDate = photo.mediaMetadata?.creationTime 
-          ? new Date(photo.mediaMetadata.creationTime).toLocaleDateString()
-          : 'Unknown date';
-        
-        const dimensions = photo.mediaMetadata?.width && photo.mediaMetadata?.height
-          ? `${photo.mediaMetadata.width}×${photo.mediaMetadata.height}`
-          : '';
-        
-        this.photoDetails.textContent = `${creationDate}${dimensions ? ' • ' + dimensions : ''} • ${index + 1}/${this.photos.length}`;
-      }
-
-      nextPhoto() {
-        if (this.photos.length === 0) return;
-        
-        this.currentPhotoIndex = (this.currentPhotoIndex + 1) % this.photos.length;
-        this.showPhoto(this.currentPhotoIndex);
-        
-        // Restart auto-advance timer
-        this.restartAutoAdvance();
-      }
-
-      prevPhoto() {
-        if (this.photos.length === 0) return;
-        
-        this.currentPhotoIndex = this.currentPhotoIndex === 0 
-          ? this.photos.length - 1 
-          : this.currentPhotoIndex - 1;
-        
-        this.showPhoto(this.currentPhotoIndex);
-        
-        // Restart auto-advance timer
-        this.restartAutoAdvance();
-      }
-
-      togglePause() {
-        this.isPaused = !this.isPaused;
-        
-        if (this.isPaused) {
-          this.stopAutoAdvance();
-          console.log('📸 ⏸️ Slideshow paused');
-        } else {
-          this.startAutoAdvance();
-          console.log('📸 ▶️ Slideshow resumed');
-        }
-      }
-
-      startAutoAdvance() {
-        if (this.isPaused) return;
-        
-        this.stopAutoAdvance();
-        this.autoAdvanceInterval = setInterval(() => {
-          this.nextPhoto();
-        }, this.transitionTime);
-      }
-
-      stopAutoAdvance() {
-        if (this.autoAdvanceInterval) {
-          clearInterval(this.autoAdvanceInterval);
-          this.autoAdvanceInterval = null;
-        }
-      }
-
-      restartAutoAdvance() {
-        if (!this.isPaused) {
-          this.startAutoAdvance();
-        }
-      }
-
-      updateTransitionTime(newTime) {
-        this.transitionTime = newTime;
-        console.log(`📸 ⏱️ Updated transition time to ${newTime/1000}s`);
-        
-        // Restart auto-advance with new timing
-        if (!this.isPaused) {
-          this.startAutoAdvance();
-        }
-      }
-
-      // Helper methods
-      shuffleArray(array) {
-        const shuffled = [...array];
-        for (let i = shuffled.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
-        return shuffled;
-      }
-
-      getDisplayPhotoUrl(baseUrl, width = 800, height = 600) {
-        if (!baseUrl) return '';
-        return `${baseUrl}=w${width}-h${height}`;
-      }
-
-      updateConnectionStatus(status) {
-        this.status.className = `status ${status}`;
-        
-        switch (status) {
-          case 'connecting':
-            this.status.textContent = '○';
-            break;
-          case 'connected':
-            this.status.textContent = '●';
-            break;
-          case 'error':
-            this.status.textContent = '✕';
-            break;
-        }
-      }
-
-      showError(message) {
-        console.error('📸 ❌ Error:', message);
-        
-        this.loading.classList.add('hidden');
-        this.photoImg.classList.add('hidden');
-        this.errorState.classList.remove('hidden');
-        this.errorMessage.textContent = message;
-        this.updateConnectionStatus('error');
-      }
-
-      applyTheme(theme) {
-        const themeClass = `theme-${theme}`;
-        
-        // Remove existing theme classes
-        document.documentElement.classList.remove('theme-dark', 'theme-light');
-        document.body.classList.remove('theme-dark', 'theme-light');
-        
-        // Add new theme class
-        document.documentElement.classList.add(themeClass);
-        document.body.classList.add(themeClass);
-        
-        console.log(`📸 Applied ${theme} theme`);
+  function updateTransitionTime(newTime) {
+    if (newTime && newTime >= 5 && newTime <= 120) {
+      transitionTime = newTime;
+      console.log(`📸 Updated transition time to ${transitionTime} seconds`);
+      
+      // Restart auto-advance with new timing
+      if (autoAdvanceInterval) {
+        clearInterval(autoAdvanceInterval);
+        startAutoAdvance();
       }
     }
+  }
 
-    // Theme management
-    function applyTheme(theme) {
-      const themeClass = `theme-${theme}`;
+  function startAutoAdvance() {
+    autoAdvanceInterval = setInterval(nextPhoto, transitionTime * 1000);
+    console.log(`📸 Auto-advance started with ${transitionTime}s interval`);
+  }
+
+  function stopAutoAdvance() {
+    if (autoAdvanceInterval) {
+      clearInterval(autoAdvanceInterval);
+      autoAdvanceInterval = null;
+      console.log('📸 Auto-advance stopped');
+    }
+  }
+
+  // Make functions globally available for navigation
+  window.photoNextPhoto = nextPhoto;
+  window.photoPrevPhoto = prevPhoto;
+  window.photoUpdateTransitionTime = updateTransitionTime;
+
+  // --- Message Handling ---
+  // Listen for commands from parent dashboard and settings updates
+  window.addEventListener('message', (event) => {
+    if (event.data && event.data.action) {
+      const action = event.data.action;
+      console.log('📸 Photos widget received command:', action);
       
-      // Remove existing theme classes
-      document.documentElement.classList.remove('theme-dark', 'theme-light');
-      document.body.classList.remove('theme-dark', 'theme-light');
-      
-      // Add new theme class
-      document.documentElement.classList.add(themeClass);
-      document.body.classList.add(themeClass);
-      
-      console.log(`📸 Photos widget applied ${theme} theme`);
+      switch(action) {
+        case 'right':
+        case 'down':
+          nextPhoto();
+          break;
+        case 'left':
+        case 'up':
+          prevPhoto();
+          break;
+        case 'enter':
+          // Optional: could pause/resume auto-advance
+          console.log('📸 Enter pressed on photos widget');
+          break;
+        default:
+          console.log('📸 Photos widget ignoring command:', action);
+          break;
+      }
     }
     
-    // Listen for theme changes from parent
-    window.addEventListener('message', (event) => {
-      if (event.data && event.data.type === 'theme-change') {
-        const newTheme = event.data.theme;
-        applyTheme(newTheme);
+    // Handle settings updates
+    if (event.data && event.data.type === 'update-settings') {
+      if (event.data.photoTransitionTime) {
+        updateTransitionTime(event.data.photoTransitionTime);
       }
-    });
+    }
+  });
+
+  // --- Initialize Photos ---
+  function initializePhotos() {
+    shuffledPhotos = shuffleArray(photos);
+    showPhoto(0);
     
-    // Request current theme from parent and send ready signal
-    window.addEventListener('load', () => {
-      if (window.parent !== window) {
-        // Request theme first
-        window.parent.postMessage({ 
-          type: 'widget-request-theme',
-          widget: 'photos' 
-        }, '*');
-        
-        // Then signal ready
-        setTimeout(() => {
-          window.parent.postMessage({ 
-            type: 'widget-ready', 
-            widget: 'photos' 
-          }, '*');
-        }, 100);
-      }
-    });
+    // Start auto-advance
+    startAutoAdvance();
+  }
 
-    // Initialize the photos widget
-    const photosWidget = new PhotosWidget();
+  // Send ready signal to parent dashboard
+  window.addEventListener('load', () => {
+    if (window.parent !== window) {
+      window.parent.postMessage({ 
+        type: 'widget-ready', 
+        widget: 'photos' 
+      }, '*');
+    }
+  });
 
-    // Make navigation functions globally available for parent communication
-    window.photoNextPhoto = () => photosWidget.nextPhoto();
-    window.photoPrevPhoto = () => photosWidget.prevPhoto();
-    window.photoTogglePause = () => photosWidget.togglePause();
-    window.photoUpdateTransitionTime = (time) => photosWidget.updateTransitionTime(time * 1000);
-  </script>
+  initializePhotos();
+});
+
+</script>
+  
 </body>
 </html>
