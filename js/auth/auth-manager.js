@@ -924,3 +924,4 @@ export class AuthManager {
     const now = Date.now();
     return (now - cacheData.lastUpdated) > cacheData.refreshInterval;
   }
+}

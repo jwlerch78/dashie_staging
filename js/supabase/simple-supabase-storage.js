@@ -165,7 +165,7 @@ export class SimpleSupabaseStorage {
         .upsert({
           user_email: user.email,
           settings: settings,
-          user_id: user.sub,
+          user_id: user.id,
           updated_at: new Date().toISOString()
         }, { 
           onConflict: 'user_email'

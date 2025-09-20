@@ -9,35 +9,73 @@ import { state, setSleepMode, setConfirmDialog } from '../core/state.js';
 export function enterSleepMode() {
   setSleepMode(true);
   
-  // Create sleep overlay - pure black screen with no content
+  // Create sleep overlay
   const sleepOverlay = document.createElement("div");
   sleepOverlay.id = "sleep-overlay";
   sleepOverlay.className = "sleep-overlay";
   
+  // IMPORTANT: Make sure it can receive keyboard events
+  sleepOverlay.setAttribute('tabindex', '-1');
+  sleepOverlay.focus();
+  
   document.body.appendChild(sleepOverlay);
   
-  // Fade in using CSS class
+console.log('ading sleep layer')
+
+  // Fade in
   setTimeout(() => {
     sleepOverlay.classList.add("visible");
   }, 10);
   
-  // Add wake up listeners
+  // Add wake up listeners - BOTH click AND keydown
   sleepOverlay.addEventListener("click", wakeUp);
+  sleepOverlay.addEventListener("keydown", (e) => {
+    e.preventDefault();
+    wakeUp();
+  });
 }
 
 export function wakeUp() {
+  console.log('🛌 wakeUp() called, state.isAsleep:', state.isAsleep);
   if (!state.isAsleep) return;
   
   setSleepMode(false);
+  console.log('🛌 After setSleepMode(false), state.isAsleep:', state.isAsleep);
+  
   const sleepOverlay = document.getElementById("sleep-overlay");
+  console.log('🛌 sleepOverlay found:', !!sleepOverlay);
   
   if (sleepOverlay) {
+    console.log('🛌 Before remove - classes:', sleepOverlay.classList.toString());
+    console.log('🛌 Before remove - computed opacity:', window.getComputedStyle(sleepOverlay).opacity);
+    
     sleepOverlay.classList.remove("visible");
+    
+    console.log('🛌 After remove - classes:', sleepOverlay.classList.toString());
+    
+    // Check immediately after class removal
     setTimeout(() => {
-      sleepOverlay.remove();
+      console.log('🛌 100ms later - computed opacity:', window.getComputedStyle(sleepOverlay).opacity);
+      console.log('🛌 100ms later - still in DOM:', !!document.getElementById("sleep-overlay"));
+    }, 100);
+    
+    setTimeout(() => {
+      console.log('🛌 500ms later - removing from DOM');
+      const stillExists = document.getElementById("sleep-overlay");
+      if (stillExists) {
+        stillExists.remove();
+        console.log('🛌 Overlay removed from DOM');
+      }
+      
+      // Final check
+      setTimeout(() => {
+        const finalCheck = document.getElementById("sleep-overlay");
+        console.log('🛌 Final check - overlay still exists:', !!finalCheck);
+      }, 50);
     }, 500);
   }
 }
+
 
 // ---------------------
 // ENHANCED EXIT CONFIRMATION WITH AUTH

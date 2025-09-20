@@ -102,6 +102,25 @@ async function handleUnifiedInput(action, originalEvent = null) {
     originalEvent.preventDefault();
   }
   
+  // Handle special actions first
+  if (action === "sleep-toggle") {
+    await handleSleepToggle();
+    return;
+  }
+
+
+   console.log('isAsleep value', state.isAsleep);
+  // Handle sleep mode - any key wakes up
+  if (state.isAsleep) {
+    console.log('Waking up');
+    const { wakeUp } = await import('../ui/modals.js');
+    const { startResleepTimer } = await import('../ui/settings.js');
+    wakeUp();
+    startResleepTimer();
+    return;
+  }
+ 
+  
   // NEW: Check if settings modal is open and let it handle events
   const settingsOverlay = document.querySelector('.settings-overlay.active');
   if (settingsOverlay) {
@@ -109,20 +128,6 @@ async function handleUnifiedInput(action, originalEvent = null) {
     return; // Let settings modal handle its own navigation
   }
   
-  // Handle special actions first
-  if (action === "sleep-toggle") {
-    await handleSleepToggle();
-    return;
-  }
-  
-  // Handle sleep mode - any key wakes up
-  if (state.isAsleep) {
-    const { wakeUp } = await import('../ui/modals.js');
-    const { startResleepTimer } = await import('../ui/settings.js');
-    wakeUp();
-    startResleepTimer();
-    return;
-  }
   
   // Handle settings modal - UPDATED for new settings system
   try {
