@@ -36,42 +36,15 @@ console.log('ading sleep layer')
 }
 
 export function wakeUp() {
-  console.log('🛌 wakeUp() called, state.isAsleep:', state.isAsleep);
   if (!state.isAsleep) return;
   
   setSleepMode(false);
-  console.log('🛌 After setSleepMode(false), state.isAsleep:', state.isAsleep);
-  
   const sleepOverlay = document.getElementById("sleep-overlay");
-  console.log('🛌 sleepOverlay found:', !!sleepOverlay);
   
   if (sleepOverlay) {
-    console.log('🛌 Before remove - classes:', sleepOverlay.classList.toString());
-    console.log('🛌 Before remove - computed opacity:', window.getComputedStyle(sleepOverlay).opacity);
-    
     sleepOverlay.classList.remove("visible");
-    
-    console.log('🛌 After remove - classes:', sleepOverlay.classList.toString());
-    
-    // Check immediately after class removal
     setTimeout(() => {
-      console.log('🛌 100ms later - computed opacity:', window.getComputedStyle(sleepOverlay).opacity);
-      console.log('🛌 100ms later - still in DOM:', !!document.getElementById("sleep-overlay"));
-    }, 100);
-    
-    setTimeout(() => {
-      console.log('🛌 500ms later - removing from DOM');
-      const stillExists = document.getElementById("sleep-overlay");
-      if (stillExists) {
-        stillExists.remove();
-        console.log('🛌 Overlay removed from DOM');
-      }
-      
-      // Final check
-      setTimeout(() => {
-        const finalCheck = document.getElementById("sleep-overlay");
-        console.log('🛌 Final check - overlay still exists:', !!finalCheck);
-      }, 50);
+      sleepOverlay.remove();
     }, 500);
   }
 }
