@@ -20,63 +20,6 @@
     <link rel="stylesheet" href="/css/components/navigation.css">
     <link rel="stylesheet" href="/js/settings/simplified-settings.css">
     
-<!-- Use the main Amplify bundle -->
-<!-- Use the working CDN -->
-<script src="https://cdn.jsdelivr.net/npm/aws-amplify@latest/dist/aws-amplify.min.js"></script>
-<script>
-    setTimeout(() => {
-        console.log('🔍 After loading aws-amplify@latest:');
-        
-        // Check what objects are available
-        const amplifyKeys = Object.keys(window).filter(k => 
-            k.toLowerCase().includes('amplify') || k.toLowerCase().includes('aws')
-        );
-        console.log('Available Amplify objects:', amplifyKeys);
-        
-        // Check specific objects the tester found
-        console.log('window.aws_amplify:', !!window.aws_amplify);
-        console.log('window.Amplify:', !!window.Amplify);
-        console.log('window.Auth:', !!window.Auth);
-        
-        // Set up the structure your CognitoAuth expects
-        let configured = false;
-        
-        if (window.aws_amplify && window.aws_amplify.Amplify && window.aws_amplify.Auth) {
-            window.aws = {
-                amplifyAuth: {
-                    Amplify: window.aws_amplify.Amplify,
-                    Auth: window.aws_amplify.Auth
-                }
-            };
-            console.log('🔐 ✅ Configured from window.aws_amplify');
-            console.log('Available Amplify methods:', Object.keys(window.aws_amplify.Amplify));
-            configured = true;
-        } 
-        else if (window.Amplify && window.Auth) {
-            window.aws = {
-                amplifyAuth: {
-                    Amplify: window.Amplify,
-                    Auth: window.Auth
-                }
-            };
-            console.log('🔐 ✅ Configured from global Amplify/Auth');
-            configured = true;
-        }
-        
-        if (configured) {
-            console.log('Final structure check:');
-            console.log('window.aws.amplifyAuth.Amplify:', typeof window.aws.amplifyAuth.Amplify);
-            console.log('window.aws.amplifyAuth.Auth:', typeof window.aws.amplifyAuth.Auth);
-            console.log('Has configure method:', 'configure' in window.aws.amplifyAuth.Amplify);
-        } else {
-            console.error('🔐 ❌ Could not configure - objects not found as expected');
-            // Log what we actually got to debug
-            if (window.aws_amplify) {
-                console.log('aws_amplify structure:', Object.keys(window.aws_amplify));
-            }
-        }
-    }, 1000); // Give it a full second to load
-</script>
 </head>
 <body class="theme-dark">
     <!-- Main app container (simplified for Cognito redirect flow) -->

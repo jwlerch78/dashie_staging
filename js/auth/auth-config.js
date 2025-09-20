@@ -1,3 +1,3 @@
 export const AUTH_CONFIG = {
-  client_secret: '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'
+  client_secret: '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'
 };
