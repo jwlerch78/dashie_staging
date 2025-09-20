@@ -8,6 +8,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashie - Family Dashboard</title>
+
+    <!-- Dynamic base tag -->
+      <script>
+        const hostname = window.location.hostname;
+        if (hostname === 'jwlerch78.github.io') {
+          document.write('<base href="/dashie_staging/">');
+        }
+      </script>
+
+    
     <link rel="icon" type="image/x-icon" href="/icons/favicon.ico">
     
     <!-- CSS imports (FIXED: All paths now absolute) -->
